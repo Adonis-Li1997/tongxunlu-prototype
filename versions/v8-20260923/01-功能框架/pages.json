@@ -1,0 +1,149 @@
+{
+  "projectName": "智能通讯录",
+  "pages": [
+    {
+      "id": "empty-state",
+      "name": "空状态",
+      "desc": "无联系人时的引导页，启动默认页",
+      "priority": "P0",
+      "entry": ["启动应用", "首页删除最后一个联系人"],
+      "roles": ["通讯录管理者", "商务人士"]
+    },
+    {
+      "id": "home",
+      "name": "联系人首页",
+      "desc": "联系人列表 + 搜索 + 索引条 + 最近联系人 + 手动新增按钮，主界面",
+      "priority": "P0",
+      "entry": ["空状态（导入后）", "Deep Link 回退"],
+      "roles": ["通讯录管理者", "商务人士"]
+    },
+    {
+      "id": "contact-detail",
+      "name": "联系人详情",
+      "desc": "展示完整字段，支持拨号/短信/分享/编辑/删除",
+      "priority": "P0",
+      "entry": ["home", "search", "duplicate-merge", "Deep Link 直达"],
+      "roles": ["通讯录管理者", "商务人士"]
+    },
+    {
+      "id": "contact-detail-multi",
+      "name": "联系人详情（多电话）",
+      "desc": "展示有多个电话号码的联系人详情（示例：李明）",
+      "priority": "P0",
+      "entry": ["home（李明）"],
+      "roles": ["通讯录管理者", "商务人士"]
+    },
+    {
+      "id": "contact-add",
+      "name": "新增联系人",
+      "desc": "手动填写表单新增联系人",
+      "priority": "P0",
+      "entry": ["home", "import-paste"],
+      "roles": ["通讯录管理者", "商务人士"]
+    },
+    {
+      "id": "contact-edit",
+      "name": "编辑联系人",
+      "desc": "修改联系人信息",
+      "priority": "P0",
+      "entry": ["contact-detail"],
+      "roles": ["通讯录管理者", "商务人士"]
+    },
+    {
+      "id": "search",
+      "name": "搜索结果",
+      "desc": "关键词搜索联系人结果列表",
+      "priority": "P0",
+      "entry": ["home"],
+      "roles": ["通讯录管理者", "商务人士"]
+    },
+    {
+      "id": "import",
+      "name": "导入方式选择",
+      "desc": "选择导入方式：系统通讯录 / 粘贴识别 / 名片 OCR / 手动新增",
+      "priority": "P0",
+      "entry": ["settings", "empty-state"],
+      "roles": ["通讯录管理者", "商务人士"]
+    },
+    {
+      "id": "import-system",
+      "name": "系统通讯录导入",
+      "desc": "导入系统通讯录联系人，权限申请 + 进度",
+      "priority": "P0",
+      "entry": ["import"],
+      "roles": ["通讯录管理者", "商务人士"]
+    },
+    {
+      "id": "import-paste",
+      "name": "粘贴识别",
+      "desc": "粘贴文本自动识别联系人信息",
+      "priority": "P0",
+      "entry": ["import"],
+      "roles": ["通讯录管理者", "商务人士"]
+    },
+    {
+      "id": "import-ocr",
+      "name": "名片 OCR",
+      "desc": "拍照或选图识别名片（OCR 方案待定，流程占位）",
+      "priority": "P1",
+      "entry": ["import"],
+      "roles": ["商务人士"]
+    },
+    {
+      "id": "duplicate-scan",
+      "name": "重复联系人扫描",
+      "desc": "扫描进度 + 结果汇总 + 按风险等级分组",
+      "priority": "P0",
+      "entry": ["settings"],
+      "roles": ["通讯录管理者", "商务人士"]
+    },
+    {
+      "id": "duplicate-merge",
+      "name": "重复合并详情",
+      "desc": "两条联系人字段对比 + 选择合并保留项 + 确认合并",
+      "priority": "P0",
+      "entry": ["duplicate-scan"],
+      "roles": ["通讯录管理者", "商务人士"]
+    },
+    {
+      "id": "share-sheet",
+      "name": "分享面板",
+      "desc": "选择分享方式（微信 / 复制链接 / 更多）",
+      "priority": "P0",
+      "entry": ["contact-detail"],
+      "roles": ["通讯录管理者", "商务人士"]
+    },
+    {
+      "id": "h5-card",
+      "name": "H5 名片页",
+      "desc": "微信内打开的名片详情 + 下载引导（分享接收端）",
+      "priority": "P1",
+      "entry": ["外部链接（微信）"],
+      "roles": ["通讯录管理者", "商务人士"]
+    },
+    {
+      "id": "settings",
+      "name": "设置",
+      "desc": "导入入口、排重入口、排重设置、清空数据、关于等",
+      "priority": "P1",
+      "entry": ["home"],
+      "roles": ["通讯录管理者", "商务人士"]
+    },
+    {
+      "id": "dial-pad",
+      "name": "拨号盘",
+      "desc": "本地拨号盘页面，从联系人详情带入号码，支持呼叫",
+      "priority": "P0",
+      "entry": ["contact-detail（拨号按钮）"],
+      "roles": ["通讯录管理者", "商务人士"]
+    },
+    {
+      "id": "sms-compose",
+      "name": "发短信",
+      "desc": "短信编辑页，从联系人详情带入号码，支持输入内容并发送",
+      "priority": "P0",
+      "entry": ["contact-detail（短信按钮）"],
+      "roles": ["通讯录管理者", "商务人士"]
+    }
+  ]
+}

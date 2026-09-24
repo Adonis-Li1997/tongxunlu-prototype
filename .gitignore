@@ -1,0 +1,8 @@
+# macOS
+.DS_Store
+
+# 本地缓存
+inputs/_extracted/
+
+# 备份文件
+*.bak

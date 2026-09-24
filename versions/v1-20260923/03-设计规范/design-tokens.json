@@ -1,0 +1,60 @@
+{
+  "preset": "custom",
+  "source": "简洁高级风格 + 块状填充图标。主色降饱和更沉稳、阴影极淡、留白通透、图标统一块状填充、中等微圆角更克制精致。",
+  "color": {
+    "light": {
+      "primary": "#1C6CF5",
+      "onPrimary": "#FFFFFF",
+      "background": "#F6F7F9",
+      "surface": "#FFFFFF",
+      "textPrimary": "#1A1D22",
+      "textSecondary": "#7E8592",
+      "border": "#E6E8EC"
+    },
+    "dark": {
+      "primary": "#4F8BFF",
+      "onPrimary": "#FFFFFF",
+      "background": "#000000",
+      "surface": "#1A1C20",
+      "textPrimary": "#F1F2F4",
+      "textSecondary": "#9DA3AE",
+      "border": "#2C2F36"
+    }
+  },
+  "radius": {
+    "sm": "6px",
+    "md": "10px",
+    "lg": "14px",
+    "full": "999px"
+  },
+  "spacing": {
+    "xs": "4px",
+    "sm": "8px",
+    "md": "20px",
+    "lg": "28px",
+    "xl": "48px"
+  },
+  "font": {
+    "family": "-apple-system,BlinkMacSystemFont,'SF Pro Display','SF Pro SC','PingFang SC',sans-serif",
+    "size": {
+      "xs": "11px",
+      "sm": "13px",
+      "base": "16px",
+      "lg": "19px",
+      "xl": "26px",
+      "2xl": "34px"
+    }
+  },
+  "shadow": {
+    "light": {
+      "md": "0 2px 12px rgba(26,29,34,.06)"
+    },
+    "dark": {
+      "md": "0 4px 24px rgba(0,0,0,.5)"
+    }
+  },
+  "icon": {
+    "style": "filled",
+    "note": "统一使用块状填充风格图标（SF Symbols filled / 自定义 filled 风格），图标圆角与系统一致，线条粗细均匀"
+  }
+}

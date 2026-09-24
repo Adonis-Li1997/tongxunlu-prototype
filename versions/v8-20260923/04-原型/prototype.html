@@ -1,0 +1,4170 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-auth="in" data-theme="light" data-rail="open">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>智能通讯录 · 原型</title>
+<style>
+/* ===== 设计 token（由 design-tokens.json 生成，唯一允许出现字面值的地方）===== */
+:root{
+  --font-family:-apple-system,BlinkMacSystemFont,'SF Pro Display','SF Pro SC','PingFang SC',sans-serif;
+  --font-size-xs:11px;--font-size-sm:13px;--font-size-base:16px;
+  --font-size-lg:19px;--font-size-xl:26px;--font-size-2xl:34px;
+  --color-primary:#1C6CF5;--color-onPrimary:#FFFFFF;
+  --color-background:#F6F7F9;--color-surface:#FFFFFF;
+  --color-textPrimary:#1A1D22;--color-textSecondary:#7E8592;
+  --color-border:#E6E8EC;
+  --color-danger:#FF3B30;
+  --radius-sm:6px;--radius-md:10px;--radius-lg:14px;--radius-full:999px;
+  --spacing-xs:4px;--spacing-sm:8px;--spacing-md:20px;--spacing-lg:28px;--spacing-xl:48px;
+  --shadow-md:0 2px 12px rgba(26,29,34,.06);
+}
+html[data-theme="dark"]{
+  --color-primary:#4F8BFF;--color-onPrimary:#FFFFFF;
+  --color-background:#000000;--color-surface:#1A1C20;
+  --color-textPrimary:#F1F2F4;--color-textSecondary:#9DA3AE;
+  --color-border:#2C2F36;
+  --color-danger:#FF453A;
+  --shadow-md:0 4px 24px rgba(0,0,0,.5);
+}
+
+/* ===== 外壳样式：全部走 var()，无硬编码 ===== */
+*{margin:0;padding:0;box-sizing:border-box}
+body{
+  font-family:var(--font-family);
+  background:var(--color-background);
+  color:var(--color-textPrimary);
+  display:flex;height:100vh;overflow:hidden;
+}
+
+/* 侧栏 */
+aside{
+  width:220px;flex:none;
+  background:var(--color-surface);
+  border-right:1px solid var(--color-border);
+  display:flex;flex-direction:column;
+  transition:margin-left .2s ease;
+}
+html[data-rail="closed"] aside{margin-left:-220px}
+.rail-head{padding:var(--spacing-md);border-bottom:1px solid var(--color-border)}
+.rail-title{font-size:var(--font-size-base);font-weight:600}
+.rail-sub{font-size:var(--font-size-xs);color:var(--color-textSecondary);margin-top:var(--spacing-xs)}
+.rail-list{flex:1;overflow-y:auto;padding:var(--spacing-sm)}
+.rail-item{
+  display:block;width:100%;text-align:left;
+  padding:var(--spacing-sm) var(--spacing-md);
+  border:none;background:transparent;cursor:pointer;
+  border-radius:var(--radius-md);
+  font-size:var(--font-size-sm);font-family:inherit;
+  color:var(--color-textSecondary);
+  margin-bottom:var(--spacing-xs);
+}
+.rail-item:hover{background:var(--color-background)}
+.rail-item[aria-current="page"]{
+  background:var(--color-primary);color:var(--color-onPrimary);font-weight:600;
+}
+.rail-foot{
+  padding:var(--spacing-sm) var(--spacing-md);
+  border-top:1px solid var(--color-border);
+  display:flex;gap:var(--spacing-xs);flex-wrap:wrap;
+}
+.rail-toggle{
+  padding:var(--spacing-xs) var(--spacing-sm);
+  font-size:var(--font-size-xs);font-family:inherit;
+  border:1px solid var(--color-border);background:transparent;
+  color:var(--color-textSecondary);cursor:pointer;
+  border-radius:var(--radius-sm);
+}
+.rail-toggle[aria-pressed="true"]{
+  border-color:var(--color-primary);color:var(--color-primary);
+}
+.rail-reopen{
+  position:fixed;left:var(--spacing-sm);top:var(--spacing-sm);z-index:30;
+  display:none;
+  padding:var(--spacing-xs) var(--spacing-sm);
+  border:1px solid var(--color-border);background:var(--color-surface);
+  color:var(--color-textSecondary);cursor:pointer;
+  border-radius:var(--radius-sm);
+  font-family:inherit;font-size:var(--font-size-xs);
+  box-shadow:var(--shadow-md);
+}
+html[data-rail="closed"] .rail-reopen{display:block}
+
+/* 画布 */
+main{
+  flex:1;overflow:auto;
+  display:flex;justify-content:center;align-items:flex-start;
+  padding:var(--spacing-lg);
+}
+.phone{
+  width:375px;height:812px;flex:none;
+  background:var(--color-surface);
+  border-radius:var(--radius-lg);
+  box-shadow:var(--shadow-md);
+  overflow:hidden;position:relative;
+  display:flex;flex-direction:column;
+}
+.statusbar{
+  height:44px;flex:none;
+  display:flex;align-items:center;justify-content:space-between;
+  padding:0 var(--spacing-lg);
+  font-size:var(--font-size-sm);font-weight:600;
+  color:var(--color-textPrimary);
+}
+.sb-icons{display:flex;align-items:center;gap:6px;font-size:var(--font-size-xs)}
+.sb-signal{letter-spacing:1px;font-size:10px}
+.sb-wifi,.sb-battery{font-size:14px;line-height:1}
+.screen{flex:1;overflow-y:auto;position:relative}
+.homebar{
+  height:34px;flex:none;
+  display:flex;align-items:center;justify-content:center;
+}
+.homebar::after{
+  content:'';width:134px;height:5px;
+  background:var(--color-textPrimary);opacity:.25;
+  border-radius:var(--radius-full);
+}
+
+/* 页面切换 */
+.page{
+  display:none;
+  padding:var(--spacing-md);
+}
+.page[data-active]{display:block}
+/* 微信消息页特殊样式 */
+.page[data-page="wechat-share"]{
+  padding:0;
+  background:#EDEDED;
+  height:100%;
+}
+/* H5 名片页特殊样式 */
+.page[data-page="h5-card"]{
+  padding:0;
+  background:var(--color-background);
+  height:100%;
+}
+
+/* ===== 组件样式：全部走 var() ===== */
+
+/* 通用工具类 */
+.page-body{display:flex;flex-direction:column;gap:var(--spacing-md)}
+.btn-block{display:flex;width:100%}
+.row{display:flex;align-items:center;gap:var(--spacing-sm)}
+.row-between{display:flex;align-items:center;justify-content:space-between;gap:var(--spacing-sm)}
+.stack{display:flex;flex-direction:column;gap:var(--spacing-sm)}
+.t-title{font-size:var(--font-size-base);font-weight:600;color:var(--color-textPrimary)}
+.t-sub{font-size:var(--font-size-sm);color:var(--color-textSecondary)}
+.t-cap{font-size:var(--font-size-xs);color:var(--color-textSecondary)}
+.remark-text{font-size:var(--font-size-base);line-height:1.7;color:#666666}
+
+/* 状态管理卡片 */
+.status-card{
+  background:var(--color-surface);
+  border-radius:var(--radius-lg);
+  border:1px solid var(--color-border);
+  padding:var(--spacing-md);
+  margin-bottom:var(--spacing-md);
+}
+.status-card-title{
+  font-size:var(--font-size-xs);
+  font-weight:600;
+  color:var(--color-textSecondary);
+  text-transform:uppercase;
+  letter-spacing:.5px;
+  margin-bottom:var(--spacing-sm);
+}
+.status-stats{
+  display:grid;grid-template-columns:1fr 1fr;
+  gap:var(--spacing-sm);
+  margin-bottom:var(--spacing-md);
+}
+.status-stat{
+  display:flex;align-items:center;gap:var(--spacing-sm);
+  background:var(--color-background);
+  border-radius:var(--radius-md);
+  padding:var(--spacing-sm) var(--spacing-md);
+}
+.status-stat-icon{
+  width:36px;height:36px;flex:none;
+  display:flex;align-items:center;justify-content:center;
+  border-radius:var(--radius-md);
+  background:rgba(28,108,245,.12);
+  font-size:18px;
+}
+html[data-theme="dark"] .status-stat-icon{background:rgba(79,139,255,.2)}
+.status-stat-icon .mask-icon{
+  width:60%;height:60%;
+  background-color:var(--color-primary);
+  mask-repeat:no-repeat;
+  -webkit-mask-repeat:no-repeat;
+  mask-position:center;
+  -webkit-mask-position:center;
+  mask-size:100% 100%;
+  -webkit-mask-size:100% 100%;
+}
+.status-stat-info{display:flex;flex-direction:column;gap:2px;min-width:0}
+.status-stat-num{
+  font-size:var(--font-size-lg);
+  font-weight:700;
+  color:var(--color-textPrimary);
+  line-height:1;
+}
+.status-stat-label{
+  font-size:var(--font-size-xs);
+  color:var(--color-textSecondary);
+}
+.status-info-row{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:var(--spacing-sm) 0;
+  border-bottom:1px solid var(--color-border);
+}
+.status-info-label{
+  font-size:var(--font-size-sm);
+  color:var(--color-textSecondary);
+}
+.status-info-value{
+  font-size:var(--font-size-sm);
+  color:var(--color-textPrimary);
+  font-weight:500;
+}
+
+/* 块状填充图标 */
+.icon{
+  width:24px;height:24px;flex:none;
+  display:inline-flex;align-items:center;justify-content:center;
+  border-radius:var(--radius-sm);
+  background:var(--color-primary);
+  color:var(--color-onPrimary);
+  font-size:var(--font-size-sm);
+  font-weight:700;
+}
+.icon-sm{width:20px;height:20px;font-size:var(--font-size-xs)}
+.icon-lg{width:32px;height:32px;font-size:var(--font-size-base)}
+.icon-xl{width:48px;height:48px;font-size:var(--font-size-lg)}
+.icon-muted{background:var(--color-background);color:var(--color-textSecondary)}
+.icon-muted .mask-icon{background-color:var(--color-textSecondary)}
+.icon.icon-soft .mask-icon{background-color:var(--color-primary)}
+.icon-soft{background:rgba(28,108,245,.12);color:var(--color-primary)}
+html[data-theme="dark"] .icon-soft{background:rgba(79,139,255,.18);color:var(--color-primary)}
+
+/* app-bar 顶部标题栏 */
+.app-bar{
+  position:sticky;
+  top:0;
+  z-index:5;
+  display:flex;align-items:center;gap:var(--spacing-sm);
+  height:44px;padding:0 var(--spacing-md);
+  background:var(--color-surface);
+  margin:calc(var(--spacing-md) * -1) calc(var(--spacing-md) * -1) var(--spacing-md);
+  border-bottom:1px solid var(--color-border);
+}
+.app-bar-title{
+  flex:1;text-align:center;
+  font-size:var(--font-size-base);font-weight:600;
+  color:var(--color-textPrimary);
+}
+.app-bar-back,.app-bar-action{
+  border:none;background:transparent;cursor:pointer;
+  font-family:inherit;font-size:var(--font-size-base);
+  color:var(--color-primary);
+  min-height:32px;min-width:32px;
+  padding:0 var(--spacing-sm);
+}
+.app-bar-back{font-size:var(--font-size-xl);line-height:1}
+.app-bar-icon-btn{
+  width:32px;height:32px;
+  display:flex;align-items:center;justify-content:center;
+  border:none;background:transparent;cursor:pointer;
+  border-radius:var(--radius-full);
+  color:var(--color-primary);
+}
+
+/* 大标题 */
+.large-title{
+  font-size:var(--font-size-xl);
+  font-weight:700;
+  color:var(--color-textPrimary);
+  margin-bottom:var(--spacing-md);
+}
+
+/* 搜索框 */
+.search-box{
+  display:flex;align-items:center;gap:var(--spacing-sm);
+  height:40px;padding:0 var(--spacing-md);
+  background:var(--color-background);
+  border-radius:var(--radius-md);
+  margin-bottom:var(--spacing-md);
+}
+.search-box input{
+  flex:1;border:none;background:transparent;outline:none;
+  font-size:var(--font-size-base);font-family:inherit;
+  color:var(--color-textPrimary);
+}
+.search-box input::placeholder{color:var(--color-textSecondary)}
+.search-icon{
+  width:18px;height:18px;flex:none;
+  background-color:var(--color-textSecondary);
+  mask-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='black'><path d='M10 2a8 8 0 1 1-4.9 14.32l-3.39 3.4a1 1 0 1 1-1.42-1.42l3.39-3.39A8 8 0 0 1 10 2zm0 2a6 6 0 1 0 0 12 6 6 0 0 0 0-12z'/></svg>");
+  -webkit-mask-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='black'><path d='M10 2a8 8 0 1 1-4.9 14.32l-3.39 3.4a1 1 0 1 1-1.42-1.42l3.39-3.39A8 8 0 0 1 10 2zm0 2a6 6 0 1 0 0 12 6 6 0 0 0 0-12z'/></svg>");
+  mask-size:100% 100%;
+  -webkit-mask-size:100% 100%;
+  mask-repeat:no-repeat;
+  -webkit-mask-repeat:no-repeat;
+}
+
+/* 卡片 */
+.card{
+  background:var(--color-surface);
+  border:1px solid var(--color-border);
+  border-radius:var(--radius-lg);
+  padding:var(--spacing-md);
+  box-shadow:var(--shadow-md);
+}
+.card-title{
+  font-size:var(--font-size-base);font-weight:600;
+  color:var(--color-textPrimary);margin-bottom:var(--spacing-xs);
+}
+.card-desc{
+  font-size:var(--font-size-sm);line-height:1.6;
+  color:var(--color-textSecondary);
+}
+.card-foot{
+  display:flex;gap:var(--spacing-sm);margin-top:var(--spacing-md);
+}
+
+/* 列表组 */
+.list-group{
+  background:var(--color-surface);
+  border-radius:var(--radius-lg);
+  overflow:hidden;
+  border:1px solid var(--color-border);
+}
+.list-section-header{
+  font-size:var(--font-size-xs);
+  font-weight:600;
+  color:var(--color-textSecondary);
+  padding:var(--spacing-sm) var(--spacing-md) var(--spacing-xs);
+  text-transform:uppercase;
+  letter-spacing:.5px;
+}
+.list-item{
+  display:flex;align-items:center;justify-content:space-between;
+  width:100%;min-height:56px;padding:var(--spacing-sm) var(--spacing-md);
+  border:none;background:transparent;cursor:pointer;
+  text-align:left;font-family:inherit;
+  border-bottom:1px solid var(--color-border);
+  gap:var(--spacing-sm);
+}
+.list-item:last-child{border-bottom:none}
+.list-item-main{display:flex;flex-direction:column;gap:var(--spacing-xs);min-width:0;flex:1}
+.list-item-title{font-size:var(--font-size-base);color:var(--color-textPrimary);font-weight:500}
+.list-item-sub{font-size:var(--font-size-sm);color:var(--color-textSecondary)}
+.list-item-arrow{font-size:var(--font-size-lg);color:var(--color-textSecondary);flex:none}
+.list-item-with-icon{display:flex;align-items:center;gap:var(--spacing-sm);flex:1;min-width:0}
+
+/* 头像 */
+.avatar{
+  width:40px;height:40px;flex:none;
+  display:flex;align-items:center;justify-content:center;
+  border-radius:var(--radius-full);
+  background:var(--color-primary);color:var(--color-onPrimary);
+  font-size:var(--font-size-sm);font-weight:600;
+}
+.avatar-sm{width:32px;height:32px;font-size:var(--font-size-xs)}
+.avatar-lg{width:56px;height:56px;font-size:var(--font-size-lg)}
+.avatar-xl{width:80px;height:80px;font-size:var(--font-size-xl)}
+
+/* 按钮 */
+.btn{
+  display:inline-flex;align-items:center;justify-content:center;
+  height:42px;padding:0 var(--spacing-lg);
+  border:none;border-radius:var(--radius-full);
+  font-size:var(--font-size-base);font-family:inherit;font-weight:600;
+  cursor:pointer;gap:var(--spacing-sm);
+}
+.btn-primary{background:var(--color-primary);color:var(--color-onPrimary)}
+.btn-secondary{background:var(--color-surface);color:var(--color-textPrimary);border:1px solid var(--color-border)}
+.btn-ghost{background:transparent;color:var(--color-primary)}
+.btn-danger{background:var(--color-surface);color:var(--color-textSecondary);border:1px solid var(--color-border)}
+
+/* FAB 悬浮按钮 */
+.fab{
+  position:sticky;
+  float:right;
+  right:0;
+  bottom:calc(var(--spacing-md) + 28px);
+  width:56px;height:56px;
+  display:flex;align-items:center;justify-content:center;
+  border-radius:var(--radius-full);
+  background:var(--color-primary);
+  color:var(--color-onPrimary);
+  font-size:var(--font-size-xl);font-weight:300;
+  border:none;cursor:pointer;
+  box-shadow:var(--shadow-md);
+  z-index:5;
+  margin-top:-60px;
+  margin-right:var(--spacing-sm);
+}
+
+/* 最近联系人横向滚动 */
+.recent-section{margin-bottom:var(--spacing-md)}
+
+/* 首页吸顶区 */
+.page[data-page="home"]{padding-top:0}
+.home-header{
+  position:sticky;
+  top:0;
+  z-index:4;
+  background:var(--color-surface);
+  padding-top:var(--spacing-md);
+  padding-bottom:var(--spacing-sm);
+  margin:0 calc(var(--spacing-md) * -1);
+  padding-left:var(--spacing-md);
+  padding-right:var(--spacing-md);
+}
+.home-header::after{
+  content:'';
+  position:absolute;
+  left:0;right:0;bottom:0;
+  height:1px;
+  background:var(--color-border);
+  opacity:.5;
+}
+.home-header + .contact-list{
+  padding-top:var(--spacing-md);
+}
+.recent-label{
+  font-size:var(--font-size-sm);font-weight:600;
+  color:var(--color-textSecondary);
+  margin-bottom:var(--spacing-sm);
+  padding:0 var(--spacing-xs);
+}
+.recent-scroll{
+  display:flex;gap:var(--spacing-sm);
+  overflow-x:auto;
+  padding:var(--spacing-xs);
+  margin:0 calc(var(--spacing-xs) * -1);
+  scrollbar-width:none;
+}
+.recent-scroll::-webkit-scrollbar{display:none}
+.recent-item{
+  display:flex;flex-direction:column;align-items:center;gap:var(--spacing-xs);
+  flex:none;width:64px;
+  cursor:pointer;
+}
+.recent-item .avatar{width:48px;height:48px;font-size:var(--font-size-sm)}
+.recent-name{
+  font-size:var(--font-size-xs);
+  color:var(--color-textPrimary);
+  text-align:center;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  max-width:64px;
+}
+
+/* 右侧字母索引条 */
+.contact-list{position:relative}
+.letter-index{
+  position:sticky;
+  float:right;
+  top:210px;
+  right:0;
+  display:flex;flex-direction:column;gap:1px;
+  z-index:3;
+  margin-right:2px;
+  margin-left:-18px;
+}
+.letter-index span{
+  font-size:10px;
+  font-weight:600;
+  color:var(--color-primary);
+  padding:1px 4px;
+  text-align:center;
+  cursor:pointer;
+  border-radius:var(--radius-sm);
+}
+.letter-index span:active{
+  background:var(--color-primary);
+  color:var(--color-onPrimary);
+}
+
+/* 分组联系人列表 */
+.contact-list .list-group{margin-bottom:var(--spacing-sm)}
+.contact-list .list-group:last-child{margin-bottom:0}
+
+/* 表单 */
+.form-group{
+  background:var(--color-surface);
+  border-radius:var(--radius-lg);
+  border:1px solid var(--color-border);
+  overflow:hidden;
+  margin-bottom:var(--spacing-md);
+}
+.form-row{
+  display:flex;align-items:center;gap:var(--spacing-sm);
+  min-height:52px;padding:var(--spacing-sm) var(--spacing-md);
+  border-bottom:1px solid var(--color-border);
+}
+.form-row:last-child{border-bottom:none}
+.form-label{
+  width:72px;flex:none;
+  font-size:var(--font-size-base);
+  color:var(--color-textPrimary);
+  font-weight:500;
+}
+.form-input{
+  flex:1;border:none;background:transparent;outline:none;
+  font-size:var(--font-size-base);font-family:inherit;
+  color:var(--color-textPrimary);
+  text-align:right;
+}
+.form-input::placeholder{color:var(--color-textSecondary)}
+.form-input-left{text-align:left}
+
+/* 电话行：类型选择 + 输入 + 删除 */
+.phone-row{
+  display:flex;align-items:center;gap:var(--spacing-sm);
+  min-height:52px;padding:var(--spacing-sm) var(--spacing-md);
+  border-bottom:1px solid var(--color-border);
+}
+.phone-row:last-child{border-bottom:none}
+.phone-type-select{
+  width:72px;flex:none;
+  font-size:var(--font-size-base);
+  color:var(--color-textPrimary);
+  font-weight:500;
+  border:none;background:transparent;outline:none;
+  appearance:none;-webkit-appearance:none;
+  padding-right:16px;
+  position:relative;
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23999'><path d='M7 10l5 5 5-5z'/></svg>");
+  background-repeat:no-repeat;
+  background-position:right center;
+  background-size:16px 16px;
+  cursor:pointer;
+  font-family:inherit;
+}
+.phone-type-select.fixed{
+  background-image:none;
+  cursor:default;
+  color:var(--color-textPrimary);
+}
+.phone-input{
+  flex:1;border:none;background:transparent;outline:none;
+  font-size:var(--font-size-base);font-family:inherit;
+  color:var(--color-textPrimary);
+  text-align:left;
+}
+.phone-input::placeholder{color:var(--color-textSecondary)}
+.phone-delete{
+  width:24px;height:24px;
+  border:none;background:transparent;
+  color:var(--color-textSecondary);
+  cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+  flex:none;
+}
+.phone-delete .icon{background:transparent;width:18px;height:18px}
+.phone-delete .icon .mask-icon{background-color:var(--color-textSecondary);width:100%;height:100%}
+.phone-add-row{
+  display:flex;align-items:center;justify-content:center;
+  min-height:44px;
+  color:var(--color-primary);
+  cursor:pointer;
+  font-size:var(--font-size-base);
+  border-bottom:none;
+}
+
+/* 底部弹出选择器 */
+.action-sheet-mask{
+  position:absolute;
+  top:0;left:0;right:0;bottom:0;
+  background:rgba(0,0,0,.4);
+  z-index:100;
+  display:none;
+  align-items:flex-end;
+  justify-content:center;
+  overflow:hidden;
+}
+.action-sheet-mask[data-show="true"]{display:flex}
+.screen[data-sheet-open="true"]{overflow:hidden}
+.action-sheet{
+  width:100%;
+  background:var(--color-surface);
+  border-radius:16px 16px 0 0;
+  padding:8px 0 calc(8px + env(safe-area-inset-bottom, 0px));
+  animation:sheetUp .25s ease-out;
+}
+@keyframes sheetUp{
+  from{transform:translateY(100%)}
+  to{transform:translateY(0)}
+}
+.action-sheet-title{
+  padding:12px 16px 8px;
+  font-size:13px;
+  color:var(--color-textSecondary);
+  text-align:center;
+}
+.action-sheet-item{
+  display:flex;align-items:center;gap:12px;
+  padding:14px 16px;
+  cursor:pointer;
+  border-bottom:1px solid var(--color-border);
+}
+.action-sheet-item:last-child{border-bottom:none}
+.action-sheet-item:active{background:var(--color-surfaceVariant)}
+.action-sheet-item .sheet-icon{
+  width:32px;height:32px;border-radius:50%;
+  background:rgba(28,108,245,.12);
+  display:flex;align-items:center;justify-content:center;
+  flex:none;
+}
+.action-sheet-item .sheet-icon .mask-icon{
+  width:18px;height:18px;
+  background-color:var(--color-primary);
+  mask-repeat:no-repeat;-webkit-mask-repeat:no-repeat;
+  mask-position:center;-webkit-mask-position:center;
+  mask-size:100% 100%;-webkit-mask-size:100% 100%;
+}
+.action-sheet-item .sheet-info{flex:1;min-width:0}
+.action-sheet-item .sheet-label{
+  font-size:13px;color:var(--color-textSecondary);
+}
+.action-sheet-item .sheet-value{
+  font-size:16px;color:var(--color-textPrimary);
+  font-weight:500;margin-top:2px;
+}
+.action-sheet-cancel{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  height:48px;
+  margin:var(--spacing-md) 12px 0;
+  background:var(--color-surfaceVariant);
+  border-radius:var(--radius-full);
+  color:var(--color-textPrimary);
+  font-weight:600;
+  font-size:var(--font-size-base);
+  border:1px solid var(--color-border);
+  cursor:pointer;
+  font-family:inherit;
+}
+.action-sheet-mask{pointer-events:auto}
+
+/* 分享弹窗（嵌入详情页内） */
+.share-sheet-mask{
+  position:absolute;
+  top:0;left:0;right:0;bottom:0;
+  background:rgba(0,0,0,.4);
+  z-index:100;
+  display:none;
+  align-items:flex-end;
+  justify-content:center;
+  overflow:hidden;
+  pointer-events:auto;
+}
+.share-sheet-mask[data-show="true"]{display:flex}
+.share-sheet{
+  width:100%;
+  background:var(--color-surface);
+  border-radius:var(--radius-lg) var(--radius-lg) 0 0;
+  padding:var(--spacing-sm) var(--spacing-md) calc(var(--spacing-md) + env(safe-area-inset-bottom, 0px));
+  animation:sheetUp .25s ease-out;
+}
+.share-sheet-handle{
+  width:36px;height:4px;
+  margin:var(--spacing-xs) auto var(--spacing-sm);
+  border-radius:var(--radius-full);
+  background:var(--color-border);
+}
+.share-sheet-title{
+  font-size:var(--font-size-sm);font-weight:600;
+  color:var(--color-textSecondary);
+  padding:var(--spacing-xs) 0 var(--spacing-md);
+  text-align:center;
+}
+.share-sheet-grid{
+  display:grid;
+  grid-template-columns:repeat(2,1fr);
+  gap:var(--spacing-sm);
+  padding:var(--spacing-sm) 0 var(--spacing-md);
+}
+.share-sheet-grid .action-btn{
+  flex-direction:column;
+  border:none;
+  background:transparent;
+}
+.share-sheet-grid .action-btn span:last-child{
+  font-size:var(--font-size-xs);
+  margin-top:var(--spacing-xs);
+  color:var(--color-textPrimary);
+}
+.share-sheet-cancel{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  width:100%;
+  height:48px;
+  background:var(--color-surfaceVariant);
+  border-radius:var(--radius-full);
+  color:var(--color-textPrimary);
+  font-weight:600;
+  font-size:var(--font-size-base);
+  border:1px solid var(--color-border);
+  cursor:pointer;
+  font-family:inherit;
+  margin-top:var(--spacing-md);
+}
+
+/* Toast 提示（与 view-card 页保持一致：竖排居中、大对勾） */
+.toast-mask{
+  position:absolute;
+  top:0;left:0;right:0;bottom:0;
+  display:none;
+  align-items:center;
+  justify-content:center;
+  z-index:200;
+  pointer-events:none;
+}
+.toast-mask[data-show="true"]{display:flex}
+.toast{
+  background:rgba(0,0,0,.75);
+  color:#fff;
+  padding:18px 24px;
+  border-radius:12px;
+  font-size:15px;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  gap:10px;
+  min-width:140px;
+  animation:toastFade .2s ease-out;
+}
+@keyframes toastFade{
+  from{opacity:0;transform:scale(.9)}
+  to{opacity:1;transform:scale(1)}
+}
+.toast .toast-icon{
+  font-size:28px;
+  line-height:1;
+}
+
+/* 删除确认弹窗（复用 action-sheet-mask 蒙版与动画） */
+
+/* 头像上传区 */
+.avatar-upload{
+  display:flex;flex-direction:column;align-items:center;
+  gap:var(--spacing-sm);
+  padding:var(--spacing-md) 0;
+}
+
+/* 详情页头像区 */
+.detail-header{
+  display:flex;flex-direction:column;align-items:center;
+  gap:var(--spacing-sm);
+  padding:var(--spacing-md) 0 var(--spacing-lg);
+}
+.detail-name{
+  font-size:var(--font-size-lg);font-weight:700;
+  color:var(--color-textPrimary);
+}
+.detail-company{
+  font-size:var(--font-size-sm);
+  color:var(--color-textSecondary);
+}
+
+/* 操作栏 */
+.action-bar{
+  display:flex;
+  background:var(--color-surface);
+  border-radius:var(--radius-lg);
+  border:1px solid var(--color-border);
+  margin-bottom:var(--spacing-md);
+  overflow:hidden;
+}
+.action-btn{
+  flex:1;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:var(--spacing-xs);
+  padding:var(--spacing-sm) 0;
+  border:none;background:transparent;cursor:pointer;
+  font-family:inherit;font-size:var(--font-size-xs);
+  color:var(--color-primary);
+  border-right:1px solid var(--color-border);
+}
+.action-btn:last-child{border-right:none}
+.action-btn .icon{width:28px;height:28px}
+.action-btn .icon .mask-icon{width:48%;height:48%}
+
+/* 块状 mask 图标（放在 .icon 方块内，白色图标形状） */
+.icon .mask-icon{
+  width:66%;
+  height:66%;
+  background-color:var(--color-onPrimary);
+  mask-repeat:no-repeat;
+  -webkit-mask-repeat:no-repeat;
+  mask-position:center;
+  -webkit-mask-position:center;
+  mask-size:100% 100%;
+  -webkit-mask-size:100% 100%;
+}
+.icon-phone{
+  mask-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='black'><path d='M20 15.5c-1.25 0-2.45-.2-3.57-.57-.35-.11-.74-.03-1.02.24l-2.2 2.2c-2.83-1.44-5.15-3.75-6.59-6.59l2.2-2.2c.28-.28.36-.67.25-1.02A11.36 11.36 0 0 1 8.5 4c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1 0 9.39 7.61 17 17 17 .55 0 1-.45 1-1v-3.5c0-.55-.45-1-1-1z'/></svg>");
+  -webkit-mask-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='black'><path d='M20 15.5c-1.25 0-2.45-.2-3.57-.57-.35-.11-.74-.03-1.02.24l-2.2 2.2c-2.83-1.44-5.15-3.75-6.59-6.59l2.2-2.2c.28-.28.36-.67.25-1.02A11.36 11.36 0 0 1 8.5 4c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1 0 9.39 7.61 17 17 17 .55 0 1-.45 1-1v-3.5c0-.55-.45-1-1-1z'/></svg>");
+}
+.icon-message{
+  mask-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='black'><path d='M20 2H4c-1.1 0-1.99.9-1.99 2L2 22l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zM6 9h12v2H6V9zm8 5H6v-2h8v2zm4-6H6V6h12v2z'/></svg>");
+  -webkit-mask-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='black'><path d='M20 2H4c-1.1 0-1.99.9-1.99 2L2 22l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zM6 9h12v2H6V9zm8 5H6v-2h8v2zm4-6H6V6h12v2z'/></svg>");
+}
+.icon-share{
+  mask-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='black'><path d='M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92s2.92-1.31 2.92-2.92-1.31-2.92-2.92-2.92z'/></svg>");
+  -webkit-mask-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='black'><path d='M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92s2.92-1.31 2.92-2.92-1.31-2.92-2.92-2.92z'/></svg>");
+}
+.icon-settings{
+  mask-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='black'><path d='M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.488.488 0 0 0-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.484.484 0 0 0-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z'/></svg>");
+  -webkit-mask-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='black'><path d='M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.488.488 0 0 0-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.484.484 0 0 0-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z'/></svg>");
+}
+.icon-import{
+  mask-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='black'><path d='M19 12v7H5v-7H3v7c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2v-7h-2zm-6 .67l2.59-2.58L17 11.5l-5 5-5-5 1.41-1.41L11 12.67V3h2z'/></svg>");
+  -webkit-mask-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='black'><path d='M19 12v7H5v-7H3v7c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2v-7h-2zm-6 .67l2.59-2.58L17 11.5l-5 5-5-5 1.41-1.41L11 12.67V3h2z'/></svg>");
+}
+.icon-search{
+  mask-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='black'><path d='M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z'/></svg>");
+  -webkit-mask-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='black'><path d='M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z'/></svg>");
+}
+.icon-bell{
+  mask-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='black'><path d='M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.63-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.64 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2zm-2 1H8v-6c0-2.48 1.51-4.5 4-4.5s4 2.02 4 4.5v6z'/></svg>");
+  -webkit-mask-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='black'><path d='M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.63-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.64 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2zm-2 1H8v-6c0-2.48 1.51-4.5 4-4.5s4 2.02 4 4.5v6z'/></svg>");
+}
+.icon-trash{
+  mask-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='black'><path d='M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z'/></svg>");
+  -webkit-mask-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='black'><path d='M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z'/></svg>");
+}
+.icon-delete{
+  mask-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='black'><path d='M22 3H7c-.69 0-1.23.35-1.59.88L0 12l5.41 8.11c.36.53.9.89 1.59.89h15c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-3 12.59L17.59 17 14 13.41 10.41 17 9 15.59 12.59 12 9 8.41 10.41 7 14 10.59 17.59 7 19 8.41 15.41 12 19 15.59z'/></svg>");
+  -webkit-mask-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='black'><path d='M22 3H7c-.69 0-1.23.35-1.59.88L0 12l5.41 8.11c.36.53.9.89 1.59.89h15c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-3 12.59L17.59 17 14 13.41 10.41 17 9 15.59 12.59 12 9 8.41 10.41 7 14 10.59 17.59 7 19 8.41 15.41 12 19 15.59z'/></svg>");
+}
+.icon-send{
+  mask-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='black'><path d='M2.01 21L23 12 2.01 3 2 10l15 2-15 2z'/></svg>");
+  -webkit-mask-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='black'><path d='M2.01 21L23 12 2.01 3 2 10l15 2-15 2z'/></svg>");
+}
+.icon-mobile{
+  mask-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='black'><path d='M17 1.01L7 1c-1.1 0-2 .9-2 2v18c0 1.1.9 2 2 2h10c1.1 0 2-.9 2-2V3c0-1.1-.9-1.99-2-1.99zM17 19H7V5h10v14zm-5-2c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2z'/></svg>");
+  -webkit-mask-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='black'><path d='M17 1.01L7 1c-1.1 0-2 .9-2 2v18c0 1.1.9 2 2 2h10c1.1 0 2-.9 2-2V3c0-1.1-.9-1.99-2-1.99zM17 19H7V5h10v14zm-5-2c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2z'/></svg>");
+}
+.icon-phone-landline{
+  mask-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='black'><path d='M20 15.5c-1.25 0-2.45-.2-3.57-.57-.35-.11-.74-.03-1.02.24l-2.2 2.2c-2.83-1.44-5.15-3.75-6.59-6.59l2.2-2.2c.28-.28.36-.67.25-1.02A11.36 11.36 0 0 1 8.5 4c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1 0 9.39 7.61 17 17 17 .55 0 1-.45 1-1v-3.5c0-.55-.45-1-1-1z'/></svg>");
+  -webkit-mask-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='black'><path d='M20 15.5c-1.25 0-2.45-.2-3.57-.57-.35-.11-.74-.03-1.02.24l-2.2 2.2c-2.83-1.44-5.15-3.75-6.59-6.59l2.2-2.2c.28-.28.36-.67.25-1.02A11.36 11.36 0 0 1 8.5 4c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1 0 9.39 7.61 17 17 17 .55 0 1-.45 1-1v-3.5c0-.55-.45-1-1-1z'/></svg>");
+}
+.icon-email{
+  mask-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='black'><path d='M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z'/></svg>");
+  -webkit-mask-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='black'><path d='M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z'/></svg>");
+}
+.icon-building{
+  mask-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='black'><path d='M12 7V3H2v18h20V7H12zM6 19H4v-2h2v2zm0-4H4v-2h2v2zm0-4H4V9h2v2zm0-4H4V5h2v2zm4 12H8v-2h2v2zm0-4H8v-2h2v2zm0-4H8V9h2v2zm0-4H8V5h2v2zm10 12h-8v-2h2v-2h-2v-2h2v-2h-2V9h8v10zm-2-8h-2v2h2v-2zm0 4h-2v2h2v-2z'/></svg>");
+  -webkit-mask-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='black'><path d='M12 7V3H2v18h20V7H12zM6 19H4v-2h2v2zm0-4H4v-2h2v2zm0-4H4V9h2v2zm0-4H4V5h2v2zm4 12H8v-2h2v2zm0-4H8v-2h2v2zm0-4H8V9h2v2zm0-4H8V5h2v2zm10 12h-8v-2h2v-2h-2v-2h2v-2h-2V9h8v10zm-2-8h-2v2h2v-2zm0 4h-2v2h2v-2z'/></svg>");
+}
+.icon-edit{
+  mask-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='black'><path d='M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z'/></svg>");
+  -webkit-mask-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='black'><path d='M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z'/></svg>");
+}
+.icon-paste{
+  mask-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='black'><path d='M19 2h-4.18C14.4.84 13.3 0 12 0c-1.3 0-2.4.84-2.82 2H5c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-7 0c.55 0 1 .45 1 1s-.45 1-1 1-1-.45-1-1 .45-1 1-1zm7 18H5V4h2v3h10V4h2v16z'/></svg>");
+  -webkit-mask-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='black'><path d='M19 2h-4.18C14.4.84 13.3 0 12 0c-1.3 0-2.4.84-2.82 2H5c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-7 0c.55 0 1 .45 1 1s-.45 1-1 1-1-.45-1-1 .45-1 1-1zm7 18H5V4h2v3h10V4h2v16z'/></svg>");
+}
+.icon-camera{
+  mask-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='black'><path d='M12 15.2c1.77 0 3.2-1.43 3.2-3.2S13.77 8.8 12 8.8 8.8 10.23 8.8 12s1.43 3.2 3.2 3.2zM9 2L7.17 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2h-3.17L15 2H9zm3 15c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5z'/></svg>");
+  -webkit-mask-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='black'><path d='M12 15.2c1.77 0 3.2-1.43 3.2-3.2S13.77 8.8 12 8.8 8.8 10.23 8.8 12s1.43 3.2 3.2 3.2zM9 2L7.17 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2h-3.17L15 2H9zm3 15c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5z'/></svg>");
+}
+.icon-wechat{
+  mask-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='black'><path d='M8.7 11.4c-.6 0-1.1-.5-1.1-1.1s.5-1.1 1.1-1.1 1.1.5 1.1 1.1-.5 1.1-1.1 1.1zm6.6 0c-.6 0-1.1-.5-1.1-1.1s.5-1.1 1.1-1.1 1.1.5 1.1 1.1-.5 1.1-1.1 1.1zM9.5 3C4.8 3 1 6.5 1 10.9c0 2.6 1.5 4.9 3.8 6.4l-.9 2.9 3.2-1.7c.8.2 1.6.3 2.4.3h.5c-.1-.4-.2-.9-.2-1.3 0-3.9 3.8-7.1 8.5-7.1h.7C17.9 5.6 14.1 3 9.5 3zm13.5 12.2c0-3-3.1-5.5-7-5.5s-7 2.5-7 5.5 3.1 5.5 7 5.5c.7 0 1.5-.1 2.2-.3l2.2 1.2-.6-1.9c2-1.3 3.2-2.8 3.2-4.5zm-9.7-.8c-.5 0-.9-.4-.9-.9s.4-.9.9-.9.9.4.9.9-.4.9-.9.9zm5.4 0c-.5 0-.9-.4-.9-.9s.4-.9.9-.9.9.4.9.9-.4.9-.9.9z'/></svg>");
+  -webkit-mask-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='black'><path d='M8.7 11.4c-.6 0-1.1-.5-1.1-1.1s.5-1.1 1.1-1.1 1.1.5 1.1 1.1-.5 1.1-1.1 1.1zm6.6 0c-.6 0-1.1-.5-1.1-1.1s.5-1.1 1.1-1.1 1.1.5 1.1 1.1-.5 1.1-1.1 1.1zM9.5 3C4.8 3 1 6.5 1 10.9c0 2.6 1.5 4.9 3.8 6.4l-.9 2.9 3.2-1.7c.8.2 1.6.3 2.4.3h.5c-.1-.4-.2-.9-.2-1.3 0-3.9 3.8-7.1 8.5-7.1h.7C17.9 5.6 14.1 3 9.5 3zm13.5 12.2c0-3-3.1-5.5-7-5.5s-7 2.5-7 5.5 3.1 5.5 7 5.5c.7 0 1.5-.1 2.2-.3l2.2 1.2-.6-1.9c2-1.3 3.2-2.8 3.2-4.5zm-9.7-.8c-.5 0-.9-.4-.9-.9s.4-.9.9-.9.9.4.9.9-.4.9-.9.9zm5.4 0c-.5 0-.9-.4-.9-.9s.4-.9.9-.9.9.4.9.9-.4.9-.9.9z'/></svg>");
+}
+.icon-copy{
+  mask-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='black'><path d='M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z'/></svg>");
+  -webkit-mask-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='black'><path d='M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z'/></svg>");
+}
+.icon-check{
+  mask-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='black'><path d='M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z'/></svg>");
+  -webkit-mask-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='black'><path d='M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z'/></svg>");
+}
+.icon-more{
+  mask-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org00/svg' viewBox='0 0 24 24' fill='black'><path d='M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z'/></svg>");
+  -webkit-mask-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='black'><path d='M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z'/></svg>");
+}
+
+/* 标签 */
+.tag{
+  display:inline-flex;align-items:center;
+  height:24px;padding:0 var(--spacing-sm);
+  border-radius:var(--radius-full);
+  font-size:var(--font-size-xs);font-weight:500;
+  background:rgba(28,108,245,.12);
+  color:var(--color-primary);
+}
+html[data-theme="dark"] .tag{background:rgba(79,139,255,.2)}
+.tag-row{display:flex;flex-wrap:wrap;gap:var(--spacing-xs)}
+
+/* 数字徽章（圆点） */
+.badge{
+  display:inline-flex;align-items:center;justify-content:center;
+  min-width:20px;height:20px;padding:0 6px;
+  border-radius:var(--radius-full);
+  background:#F43F5E;
+  color:#FFFFFF;
+  font-size:var(--font-size-xs);
+  font-weight:600;
+}
+
+/* 空状态 */
+.empty-state{
+  display:flex;flex-direction:column;align-items:center;
+  gap:var(--spacing-sm);
+  padding:var(--spacing-xl) var(--spacing-md);
+  text-align:center;
+}
+.empty-state-icon{
+  width:72px;height:72px;
+  display:flex;align-items:center;justify-content:center;
+  border-radius:var(--radius-lg);
+  background:var(--color-background);
+  margin-bottom:var(--spacing-sm);
+}
+.empty-state-icon .icon-xl{background:var(--color-textSecondary);opacity:.3}
+.empty-state-title{
+  font-size:var(--font-size-lg);font-weight:600;
+  color:var(--color-textPrimary);
+}
+.empty-state-desc{
+  font-size:var(--font-size-sm);line-height:1.6;
+  color:var(--color-textSecondary);
+  margin-bottom:var(--spacing-sm);
+  max-width:280px;
+}
+
+/* 加载态 */
+.loading-state{
+  display:flex;flex-direction:column;align-items:center;
+  gap:var(--spacing-sm);
+  padding:var(--spacing-xl) var(--spacing-md);
+}
+.spinner{
+  width:36px;height:36px;
+  border:3px solid var(--color-border);
+  border-top-color:var(--color-primary);
+  border-radius:var(--radius-full);
+  animation:spin .8s linear infinite;
+  margin-bottom:var(--spacing-sm);
+}
+.loading-text{font-size:var(--font-size-sm);color:var(--color-textSecondary)}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* 进度条 */
+.progress{display:flex;flex-direction:column;gap:var(--spacing-xs);width:100%}
+.progress-head{display:flex;justify-content:space-between;align-items:baseline}
+.progress-label{font-size:var(--font-size-sm);color:var(--color-textPrimary)}
+.progress-value{font-size:var(--font-size-xs);color:var(--color-textSecondary)}
+.progress-track{
+  height:6px;width:100%;
+  border-radius:var(--radius-full);
+  background:var(--color-border);
+  overflow:hidden;
+}
+.progress-fill{
+  height:100%;
+  border-radius:var(--radius-full);
+  background:var(--color-primary);
+}
+
+/* 底部动作面板 */
+.sheet-mask{
+  position:absolute;inset:0;z-index:10;
+  display:flex;align-items:flex-end;
+  background:var(--color-textPrimary);
+  opacity:.98;
+}
+.sheet{
+  width:100%;
+  background:var(--color-surface);
+  border-radius:var(--radius-lg) var(--radius-lg) 0 0;
+  padding:var(--spacing-sm) var(--spacing-md) calc(var(--spacing-lg) + var(--spacing-md));
+  box-shadow:var(--shadow-md);
+}
+.sheet-handle{
+  width:36px;height:4px;margin:var(--spacing-xs) auto var(--spacing-sm);
+  border-radius:var(--radius-full);
+  background:var(--color-border);
+}
+.sheet-title{
+  font-size:var(--font-size-sm);font-weight:600;
+  color:var(--color-textSecondary);
+  padding:var(--spacing-xs) 0 var(--spacing-sm);
+  text-align:center;
+}
+.sheet-item{
+  display:flex;align-items:center;gap:var(--spacing-sm);
+  width:100%;
+  min-height:56px;padding:var(--spacing-sm) var(--spacing-md);
+  border:none;background:transparent;cursor:pointer;
+  text-align:left;font-family:inherit;
+  font-size:var(--font-size-base);
+  color:var(--color-textPrimary);
+  border-bottom:1px solid var(--color-border);
+}
+.sheet-item:last-child{border-bottom:none}
+.sheet-item-danger{color:var(--color-primary);font-weight:600}
+.sheet-item-cancel{
+  color:var(--color-textSecondary);
+  margin-top:var(--spacing-xs);
+  margin-bottom:var(--spacing-sm);
+  border-radius:var(--radius-full);
+  border:1px solid var(--color-border);
+  min-height:auto;
+  height:42px;
+  padding:0 var(--spacing-lg);
+  justify-content:center;
+}
+.sheet-item-cancel:last-child{border-bottom:1px solid var(--color-border)}
+
+/* 导入方式卡片网格 */
+.import-grid{
+  display:grid;grid-template-columns:1fr 1fr;
+  gap:var(--spacing-sm);
+  margin-bottom:var(--spacing-md);
+}
+.import-card{
+  background:var(--color-surface);
+  border:1px solid var(--color-border);
+  border-radius:var(--radius-lg);
+  padding:var(--spacing-md);
+  display:flex;flex-direction:column;gap:var(--spacing-sm);
+  cursor:pointer;
+  text-align:left;
+  font-family:inherit;
+}
+.import-card .icon{align-self:flex-start}
+.import-card-title{
+  font-size:var(--font-size-base);font-weight:600;
+  color:var(--color-textPrimary);
+}
+.import-card-desc{
+  font-size:var(--font-size-xs);
+  color:var(--color-textSecondary);
+  line-height:1.5;
+}
+
+/* 粘贴识别文本框 */
+.paste-box{
+  width:100%;min-height:160px;
+  padding:var(--spacing-md);
+  border:1px solid var(--color-border);
+  border-radius:var(--radius-lg);
+  background:var(--color-surface);
+  color:var(--color-textPrimary);
+  font-size:var(--font-size-base);font-family:inherit;
+  line-height:1.6;resize:none;
+  margin-bottom:var(--spacing-md);
+}
+.paste-box::placeholder{color:var(--color-textSecondary)}
+
+/* 识别结果预览 */
+.recognize-result{
+  background:var(--color-surface);
+  border:1px solid var(--color-border);
+  border-radius:var(--radius-lg);
+  padding:var(--spacing-md);
+  margin-bottom:var(--spacing-md);
+}
+.recognize-title{
+  font-size:var(--font-size-sm);font-weight:600;
+  color:var(--color-textPrimary);
+  margin-bottom:var(--spacing-sm);
+  display:flex;align-items:center;gap:var(--spacing-xs);
+}
+
+/* 排重扫描结果 */
+.duplicate-stats{
+  display:grid;grid-template-columns:repeat(3,1fr);
+  gap:var(--spacing-sm);
+  margin-bottom:var(--spacing-md);
+}
+.dup-stat{
+  background:var(--color-surface);
+  border:1px solid var(--color-border);
+  border-radius:var(--radius-lg);
+  padding:var(--spacing-md) var(--spacing-sm);
+  text-align:center;
+}
+.dup-stat-num{
+  font-size:var(--font-size-xl);font-weight:700;
+  color:var(--color-primary);
+}
+.dup-stat-label{
+  font-size:var(--font-size-xs);
+  color:var(--color-textSecondary);
+  margin-top:var(--spacing-xs);
+}
+.dup-risk-high .dup-stat-num{color:var(--color-primary)}
+.dup-risk-mid .dup-stat-num{color:var(--color-textPrimary)}
+.dup-risk-low .dup-stat-num{color:var(--color-textSecondary)}
+
+.dup-group{
+  background:var(--color-surface);
+  border:1px solid var(--color-border);
+  border-radius:var(--radius-lg);
+  margin-bottom:var(--spacing-sm);
+  overflow:hidden;
+  cursor:pointer;
+}
+.dup-group-head{
+  display:flex;align-items:center;gap:var(--spacing-sm);
+  padding:var(--spacing-sm) var(--spacing-md);
+  border-bottom:1px solid var(--color-border);
+}
+.dup-risk-badge{
+  font-size:var(--font-size-xs);font-weight:600;
+  padding:2px var(--spacing-sm);
+  border-radius:var(--radius-full);
+  background:rgba(28,108,245,.12);
+  color:var(--color-primary);
+}
+html[data-theme="dark"] .dup-risk-badge{background:rgba(79,139,255,.2)}
+.dup-risk-orange{background:rgba(245,158,11,.15);color:#F59E0B}
+html[data-theme="dark"] .dup-risk-orange{background:rgba(245,158,11,.25)}
+.dup-risk-yellow{background:rgba(234,179,8,.15);color:#CA8A04}
+html[data-theme="dark"] .dup-risk-yellow{background:rgba(234,179,8,.25)}
+
+/* 合并对比 */
+.merge-compare{
+  display:grid;grid-template-columns:1fr auto 1fr;
+  gap:var(--spacing-sm);
+  align-items:center;
+  background:var(--color-surface);
+  border:1px solid var(--color-border);
+  border-radius:var(--radius-lg);
+  padding:var(--spacing-md);
+  margin-bottom:var(--spacing-md);
+}
+.merge-col{display:flex;flex-direction:column;gap:var(--spacing-xs);align-items:center}
+.merge-col .avatar{margin-bottom:var(--spacing-xs)}
+.merge-name{font-size:var(--font-size-base);font-weight:600;color:var(--color-textPrimary);text-align:center}
+.merge-phone{font-size:var(--font-size-xs);color:var(--color-textSecondary);text-align:center}
+.merge-vs{font-size:var(--font-size-sm);font-weight:700;color:var(--color-textSecondary)}
+
+/* H5 名片页 */
+.h5-card-wrap{
+  display:flex;flex-direction:column;
+  min-height:100%;
+  background:linear-gradient(180deg,var(--color-primary) 0%,var(--color-background) 40%);
+  margin:0 calc(var(--spacing-md) * -1);
+  padding:0 var(--spacing-md);
+}
+.h5-card-top{
+  padding:var(--spacing-lg) 0 var(--spacing-md);
+  text-align:center;
+}
+.h5-card-top .avatar-xl{margin:0 auto var(--spacing-sm)}
+.h5-name{font-size:var(--font-size-xl);font-weight:700;color:#FFFFFF}
+.h5-title{font-size:var(--font-size-sm);color:rgba(255,255,255,.8);margin-top:var(--spacing-xs)}
+.h5-card-body{
+  background:var(--color-surface);
+  border-radius:var(--radius-lg);
+  padding:var(--spacing-md);
+  flex:1;
+  box-shadow:var(--shadow-md);
+}
+.h5-download-bar{
+  position:sticky;bottom:0;
+  padding:var(--spacing-md) var(--spacing-md) calc(var(--spacing-md) + var(--spacing-sm));
+  background:var(--color-surface);
+  border-top:1px solid var(--color-border);
+}
+
+/* 设置页分组 */
+.settings-section{margin-bottom:var(--spacing-md)}
+.settings-title{
+  font-size:var(--font-size-xs);font-weight:600;
+  color:var(--color-textSecondary);
+  text-transform:uppercase;
+  letter-spacing:.5px;
+  margin-bottom:var(--spacing-xs);
+  padding:0 var(--spacing-xs);
+}
+
+/* 联系统计行 */
+.stats-row{
+  display:flex;gap:var(--spacing-md);
+  padding:var(--spacing-sm) 0;
+}
+.stat-item{display:flex;flex-direction:column;gap:2px}
+.stat-num{font-size:var(--font-size-base);font-weight:600;color:var(--color-textPrimary)}
+.stat-label{font-size:var(--font-size-xs);color:var(--color-textSecondary)}
+
+/* 大按钮（带图标） */
+.btn-icon{
+  display:flex;align-items:center;justify-content:center;
+  gap:var(--spacing-sm);
+}
+
+/* ========== 拨号盘 ========== */
+.dial-display{
+  padding:48px 20px 24px;
+  text-align:center;
+}
+.dial-number{
+  font-size:36px;
+  font-weight:500;
+  color:var(--color-textPrimary);
+  letter-spacing:1px;
+  min-height:44px;
+}
+.dial-name{
+  margin-top:8px;
+  font-size:15px;
+  color:var(--color-textSecondary);
+}
+.dial-keypad{
+  padding:0 40px 24px;
+}
+.keypad-row{
+  display:flex;
+  justify-content:space-around;
+  margin-bottom:16px;
+}
+.keypad-key{
+  width:64px;
+  height:64px;
+  border-radius:50%;
+  background:var(--color-surfaceVariant);
+  border:none;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  cursor:pointer;
+  transition:background .15s;
+}
+.keypad-key:active{
+  background:var(--color-outlineVariant);
+}
+.key-num{
+  font-size:28px;
+  font-weight:400;
+  color:var(--color-textPrimary);
+  line-height:1;
+}
+.key-letters{
+  font-size:10px;
+  color:var(--color-textSecondary);
+  margin-top:2px;
+  letter-spacing:1px;
+}
+.keypad-empty{
+  background:transparent;
+  cursor:default;
+}
+.keypad-call{
+  width:64px;
+  height:64px;
+  border-radius:50%;
+  background:#34C759;
+  border:none;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  cursor:pointer;
+}
+.keypad-call .icon{
+  background:transparent;
+  width:32px;height:32px;
+}
+.keypad-call .icon .mask-icon{
+  background-color:#fff;
+  width:100%;height:100%;
+}
+.keypad-delete{
+  background:transparent;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  cursor:pointer;
+}
+.keypad-delete .icon{
+  background:transparent;
+  width:24px;height:24px;
+}
+.keypad-delete .icon .mask-icon{
+  background-color:var(--color-textSecondary);
+  width:100%;height:100%;
+}
+
+/* ========== 发短信 ========== */
+.sms-to{
+  padding:12px 16px;
+  display:flex;
+  align-items:center;
+  gap:8px;
+  border-bottom:1px solid var(--color-border);
+  font-size:15px;
+}
+.sms-to-label{color:var(--color-textSecondary)}
+.sms-to-name{color:var(--color-textPrimary);font-weight:500}
+.sms-to-phone{color:var(--color-textSecondary);font-size:14px}
+.sms-messages{
+  padding:16px;
+  min-height:300px;
+}
+.sms-bubble{
+  max-width:75%;
+  margin-bottom:12px;
+  display:flex;
+  flex-direction:column;
+}
+.sms-bubble-received{align-items:flex-start}
+.sms-bubble-sent{align-items:flex-end;margin-left:auto}
+.sms-bubble-text{
+  padding:10px 14px;
+  border-radius:18px;
+  font-size:15px;
+  line-height:1.4;
+  word-break:break-word;
+}
+.sms-bubble-received .sms-bubble-text{
+  background:var(--color-surfaceVariant);
+  color:var(--color-textPrimary);
+  border-bottom-left-radius:6px;
+}
+.sms-bubble-sent .sms-bubble-text{
+  background:var(--color-primary);
+  color:var(--color-onPrimary);
+  border-bottom-right-radius:6px;
+}
+.sms-bubble-time{
+  font-size:11px;
+  color:var(--color-textSecondary);
+  margin-top:4px;
+  padding:0 4px;
+}
+.sms-input-bar{
+  position:absolute;
+  bottom:0;left:0;right:0;
+  padding:8px 12px;
+  padding-bottom:calc(8px + env(safe-area-inset-bottom, 0px));
+  background:var(--color-surface);
+  border-top:1px solid var(--color-border);
+  display:flex;
+  align-items:flex-end;
+  gap:8px;
+}
+.sms-input{
+  flex:1;
+  min-height:36px;
+  max-height:120px;
+  padding:8px 12px;
+  border-radius:18px;
+  border:1px solid var(--color-outlineVariant);
+  background:var(--color-surfaceVariant);
+  color:var(--color-textPrimary);
+  font-size:15px;
+  line-height:1.4;
+  resize:none;
+  outline:none;
+  font-family:inherit;
+}
+.sms-input::placeholder{color:var(--color-textSecondary)}
+.sms-send-btn{
+  width:36px;
+  height:36px;
+  border-radius:50%;
+  background:var(--color-primary);
+  border:none;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  cursor:pointer;
+  flex-shrink:0;
+}
+.sms-send-btn .icon{
+  background:transparent;
+  width:20px;height:20px;
+}
+.sms-send-btn .icon .mask-icon{
+  background-color:var(--color-onPrimary);
+  width:100%;height:100%;
+}
+</style>
+</head>
+<body>
+
+<aside>
+  <div class="rail-head">
+    <div class="rail-title">智能通讯录</div>
+    <div class="rail-sub">交互原型 · 移动端</div>
+  </div>
+  <nav class="rail-list">
+<button class="rail-item" data-page-link="empty-state">空状态</button>
+<button class="rail-item" data-page-link="import-system">导入·授权</button>
+<button class="rail-item" data-page-link="import-loading">导入·读取中</button>
+<button class="rail-item" data-page-link="import-list">导入·通讯录列表</button>
+<button class="rail-item" data-page-link="import-progress">导入·进度/成功</button>
+<button class="rail-item" data-page-link="home">联系人首页</button>
+<button class="rail-item" data-page-link="contact-detail">联系人详情</button>
+<button class="rail-item" data-page-link="contact-detail-multi">联系人详情（多电话）</button>
+<button class="rail-item" data-page-link="contact-add">新增联系人</button>
+<button class="rail-item" data-page-link="contact-edit">编辑联系人</button>
+<button class="rail-item" data-page-link="search">搜索结果</button>
+<button class="rail-item" data-page-link="import-paste">粘贴识别</button>
+<button class="rail-item" data-page-link="import-ocr">名片 OCR</button>
+<button class="rail-item" data-page-link="duplicate-scan">重复联系人扫描</button>
+<button class="rail-item" data-page-link="duplicate-merge">重复合并详情</button>
+<button class="rail-item" data-page-link="merge-single-loading">单组合并/成功</button>
+<button class="rail-item" data-page-link="merge-loading">批量合并/成功</button>
+<button class="rail-item" data-page-link="share-sheet">分享面板</button>
+<button class="rail-item" data-page-link="wechat-share">微信分享消息</button>
+<button class="rail-item" data-page-link="h5-card">微信H5名片详情页</button>
+<button class="rail-item" data-page-link="view-card">查看他人名片</button>
+<button class="rail-item" data-page-link="settings">设置</button>
+<button class="rail-item" data-page-link="dial-pad">拨号盘</button>
+<button class="rail-item" data-page-link="sms-compose">发短信</button>
+<button class="rail-item" data-page-link="clear-confirm">清空确认弹窗</button>
+  </nav>
+  <div class="rail-foot">
+    <button class="rail-toggle" data-toggle="auth" aria-pressed="true">已登录</button>
+    <button class="rail-toggle" data-toggle="theme" aria-pressed="false">暗色</button>
+    <button class="rail-toggle" data-toggle="rail" aria-pressed="true">收起</button>
+  </div>
+</aside>
+
+<button class="rail-reopen" data-toggle="rail" aria-label="展开侧栏">展开</button>
+
+<main>
+  <div class="phone">
+    <div class="statusbar">
+      <span class="sb-time">9:41</span>
+      <span class="sb-icons">
+        <span class="sb-signal">▮▮▮▮</span>
+        <span class="sb-wifi">📶</span>
+        <span class="sb-battery">🔋</span>
+      </span>
+    </div>
+    <div class="screen">
+
+<!-- ================= 1. 空状态 empty-state ================= -->
+<section class="page" data-page="empty-state">
+  <header class="app-bar">
+    <span style="width:32px"></span>
+    <span class="app-bar-title">通讯录</span>
+    <button class="app-bar-icon-btn" data-goto="settings" aria-label="设置">
+      <span class="icon icon-sm"><span class="mask-icon icon-settings"></span></span>
+    </button>
+  </header>
+
+  <div class="empty-state">
+    <div class="empty-state-icon">
+      <span class="icon-xl" style="background:var(--color-textSecondary);opacity:.25">📒</span>
+    </div>
+    <div class="empty-state-title">还没有联系人</div>
+    <div class="empty-state-desc">
+      导入你的联系人，开始高效管理。支持系统通讯录导入、粘贴识别和名片拍照识别。
+    </div>
+    <button class="btn btn-primary btn-block" data-goto="import-system">
+      导入联系人
+    </button>
+    <button class="btn btn-ghost btn-block" data-show-sheet data-target="add-sheet-empty">
+      手动添加联系人
+    </button>
+  </div>
+
+  <!-- 新增方式弹窗 -->
+  <div class="share-sheet-mask" id="add-sheet-empty">
+    <div class="share-sheet">
+      <div class="share-sheet-title">新增联系人</div>
+      <div class="share-sheet-grid" style="grid-template-columns:repeat(3,1fr)">
+        <button class="action-btn" style="flex-direction:column;border:none" data-goto="contact-add" data-hide-popup>
+          <span class="icon icon-lg"><span class="mask-icon icon-edit"></span></span>
+          <span>手动新增</span>
+        </button>
+        <button class="action-btn" style="flex-direction:column;border:none" data-goto="import-paste" data-hide-popup>
+          <span class="icon icon-lg"><span class="mask-icon icon-paste"></span></span>
+          <span>粘贴识别</span>
+        </button>
+        <button class="action-btn" style="flex-direction:column;border:none" data-goto="import-ocr" data-hide-popup>
+          <span class="icon icon-lg"><span class="mask-icon icon-camera"></span></span>
+          <span>名片 OCR</span>
+        </button>
+      </div>
+      <button class="share-sheet-cancel" data-hide-popup>取消</button>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 2. 联系人首页 home ================= -->
+<section class="page" data-page="home">
+  <!-- 吸顶区域：标题 + 搜索 + 最近联系人 -->
+  <div class="home-header">
+    <div class="row-between" style="margin-bottom:var(--spacing-sm)">
+      <h1 class="large-title" style="margin:0">通讯录</h1>
+      <button class="app-bar-icon-btn" data-goto="settings" aria-label="设置">
+        <span class="icon icon-sm"><span class="mask-icon icon-settings"></span></span>
+      </button>
+    </div>
+
+    <div class="search-box" data-goto="search">
+      <div class="search-icon"></div>
+      <input type="text" placeholder="搜索联系人" readonly>
+    </div>
+
+    <!-- 最近联系人 -->
+    <div class="recent-section">
+      <div class="recent-label">最近联系</div>
+      <div class="recent-scroll">
+        <div class="recent-item" data-goto="contact-detail">
+          <div class="avatar">张</div>
+          <span class="recent-name">张伟</span>
+        </div>
+        <div class="recent-item" data-goto="contact-detail">
+          <div class="avatar">李</div>
+          <span class="recent-name">李娜</span>
+        </div>
+        <div class="recent-item" data-goto="contact-detail">
+          <div class="avatar">王</div>
+          <span class="recent-name">王芳</span>
+        </div>
+        <div class="recent-item" data-goto="contact-detail">
+          <div class="avatar">刘</div>
+          <span class="recent-name">刘强</span>
+        </div>
+        <div class="recent-item" data-goto="contact-detail">
+          <div class="avatar">陈</div>
+          <span class="recent-name">陈静</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 联系人列表（分组，可滚动） -->
+  <div class="contact-list">
+    <!-- 字母索引栏（列表内悬浮固定） -->
+    <div class="letter-index" data-letter-index>
+      <span data-scroll-to="letter-A">A</span>
+      <span data-scroll-to="letter-B">B</span>
+      <span data-scroll-to="letter-C">C</span>
+      <span data-scroll-to="letter-D">D</span>
+      <span data-scroll-to="letter-F">F</span>
+      <span data-scroll-to="letter-G">G</span>
+      <span data-scroll-to="letter-H">H</span>
+      <span data-scroll-to="letter-J">J</span>
+      <span data-scroll-to="letter-K">K</span>
+      <span data-scroll-to="letter-L">L</span>
+      <span data-scroll-to="letter-M">M</span>
+      <span data-scroll-to="letter-N">N</span>
+      <span data-scroll-to="letter-P">P</span>
+      <span data-scroll-to="letter-Q">Q</span>
+      <span data-scroll-to="letter-S">S</span>
+      <span data-scroll-to="letter-T">T</span>
+      <span data-scroll-to="letter-W">W</span>
+      <span data-scroll-to="letter-X">X</span>
+      <span data-scroll-to="letter-Y">Y</span>
+      <span data-scroll-to="letter-Z">Z</span>
+      <span data-scroll-to="letter-#">#</span>
+    </div>
+
+    <div class="list-section-header" id="letter-A">A</div>
+    <div class="list-group">
+      <button class="list-item" data-goto="contact-detail">
+        <div class="list-item-with-icon">
+          <div class="avatar avatar-sm">安</div>
+          <div class="list-item-main">
+            <span class="list-item-title">安然</span>
+            <span class="list-item-sub">131 2222 3333</span>
+          </div>
+        </div>
+        <span class="list-item-arrow">›</span>
+      </button>
+    </div>
+
+    <div class="list-section-header" id="letter-L">L</div>
+    <div class="list-group">
+      <button class="list-item" data-goto="contact-detail-multi">
+        <div class="list-item-with-icon">
+          <div class="avatar avatar-sm">李</div>
+          <div class="list-item-main">
+            <span class="list-item-title">李明</span>
+            <span class="list-item-sub">138 0013 8000</span>
+          </div>
+        </div>
+        <span class="list-item-arrow">›</span>
+      </button>
+      <button class="list-item" data-goto="contact-detail">
+        <div class="list-item-with-icon">
+          <div class="avatar avatar-sm">刘</div>
+          <div class="list-item-main">
+            <span class="list-item-title">刘洋</span>
+            <span class="list-item-sub">137 4444 5555</span>
+          </div>
+        </div>
+        <span class="list-item-arrow">›</span>
+      </button>
+    </div>
+
+    <div class="list-section-header" id="letter-W">W</div>
+    <div class="list-group">
+      <button class="list-item" data-goto="contact-detail">
+        <div class="list-item-with-icon">
+          <div class="avatar avatar-sm">王</div>
+          <div class="list-item-main">
+            <span class="list-item-title">王磊</span>
+            <span class="list-item-sub">186 1234 5678</span>
+          </div>
+        </div>
+        <span class="list-item-arrow">›</span>
+      </button>
+      <button class="list-item" data-goto="contact-detail">
+        <div class="list-item-with-icon">
+          <div class="avatar avatar-sm">吴</div>
+          <div class="list-item-main">
+            <span class="list-item-title">吴彦</span>
+            <span class="list-item-sub">133 7777 8888</span>
+          </div>
+        </div>
+        <span class="list-item-arrow">›</span>
+      </button>
+    </div>
+
+    <div class="list-section-header" id="letter-Z">Z</div>
+    <div class="list-group">
+      <button class="list-item" data-goto="contact-detail">
+        <div class="list-item-with-icon">
+          <div class="avatar avatar-sm">张</div>
+          <div class="list-item-main">
+            <span class="list-item-title">张伟</span>
+            <span class="list-item-sub">139 8888 6666</span>
+          </div>
+        </div>
+        <span class="list-item-arrow">›</span>
+      </button>
+      <button class="list-item" data-goto="contact-detail">
+        <div class="list-item-with-icon">
+          <div class="avatar avatar-sm">赵</div>
+          <div class="list-item-main">
+            <span class="list-item-title">赵敏</span>
+            <span class="list-item-sub">136 9999 0000</span>
+          </div>
+        </div>
+        <span class="list-item-arrow">›</span>
+      </button>
+      <button class="list-item" data-goto="contact-detail">
+        <div class="list-item-with-icon">
+          <div class="avatar avatar-sm">周</div>
+          <div class="list-item-main">
+            <span class="list-item-title">周杰</span>
+            <span class="list-item-sub">135 6666 8888</span>
+          </div>
+        </div>
+        <span class="list-item-arrow">›</span>
+      </button>
+    </div>
+  </div>
+
+  <button class="fab" data-show-sheet data-target="add-sheet-home" aria-label="新增联系人">+</button>
+
+  <!-- 新增方式弹窗 -->
+  <div class="share-sheet-mask" id="add-sheet-home">
+    <div class="share-sheet">
+      <div class="share-sheet-title">新增联系人</div>
+      <div class="share-sheet-grid" style="grid-template-columns:repeat(3,1fr)">
+        <button class="action-btn" style="flex-direction:column;border:none" data-goto="contact-add" data-hide-popup>
+          <span class="icon icon-lg"><span class="mask-icon icon-edit"></span></span>
+          <span>手动新增</span>
+        </button>
+        <button class="action-btn" style="flex-direction:column;border:none" data-goto="import-paste" data-hide-popup>
+          <span class="icon icon-lg"><span class="mask-icon icon-paste"></span></span>
+          <span>粘贴识别</span>
+        </button>
+        <button class="action-btn" style="flex-direction:column;border:none" data-goto="import-ocr" data-hide-popup>
+          <span class="icon icon-lg"><span class="mask-icon icon-camera"></span></span>
+          <span>名片 OCR</span>
+        </button>
+      </div>
+      <button class="share-sheet-cancel" data-hide-popup>取消</button>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 2. 联系人详情 contact-detail ================= -->
+<section class="page" data-page="contact-detail">
+  <header class="app-bar">
+    <button class="app-bar-back" data-goto="home">‹</button>
+    <span class="app-bar-title">联系人</span>
+    <button class="app-bar-action" data-goto="contact-edit">编辑</button>
+  </header>
+
+  <div class="page-body">
+    <!-- 顶部头像区 -->
+    <div class="detail-header">
+      <div class="avatar avatar-xl">张</div>
+      <div class="detail-name">张伟</div>
+      <div class="detail-company">字节跳动</div>
+      <div class="tag-row" style="justify-content:center">
+        <span class="tag">同事</span>
+        <span class="tag">重要</span>
+      </div>
+    </div>
+
+    <!-- 操作栏 -->
+    <div class="action-bar">
+      <button class="action-btn" data-goto="dial-pad">
+        <span class="icon"><span class="mask-icon icon-phone"></span></span>
+        <span>拨号</span>
+      </button>
+      <button class="action-btn" data-goto="sms-compose">
+        <span class="icon"><span class="mask-icon icon-message"></span></span>
+        <span>短信</span>
+      </button>
+      <button class="action-btn" data-show-share data-target="share-sheet-1">
+        <span class="icon"><span class="mask-icon icon-share"></span></span>
+        <span>分享</span>
+      </button>
+    </div>
+
+    <!-- 电话 -->
+    <div class="list-group">
+      <div class="list-section-header">电话</div>
+      <div class="list-item" style="cursor:default">
+        <div class="list-item-with-icon">
+          <span class="icon icon-sm icon-soft"><span class="mask-icon icon-mobile"></span></span>
+          <div class="list-item-main">
+            <span class="list-item-title">手机</span>
+            <span class="list-item-sub">139 8888 6666</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 邮箱 -->
+    <div class="list-group">
+      <div class="list-section-header">邮箱</div>
+      <div class="list-item" style="cursor:default">
+        <div class="list-item-with-icon">
+          <span class="icon icon-sm icon-soft"><span class="mask-icon icon-email"></span></span>
+          <div class="list-item-main">
+            <span class="list-item-title">工作邮箱</span>
+            <span class="list-item-sub">zhangwei@bytedance.com</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 备注 -->
+    <div class="list-group">
+      <div class="list-section-header">备注</div>
+      <div class="list-item" style="cursor:default;min-height:auto;padding:var(--spacing-md)">
+        <span class="remark-text">负责抖音电商产品方向，2024年Q1对接过直播带货项目。习惯下午3点后通话。</span>
+      </div>
+    </div>
+
+    <!-- 状态管理 -->
+    <div class="status-card">
+      <div class="status-card-title">状态管理</div>
+      <div class="status-stats">
+        <div class="status-stat">
+          <span class="status-stat-icon"><span class="mask-icon icon-phone"></span></span>
+          <div class="status-stat-info">
+            <span class="status-stat-num">28</span>
+            <span class="status-stat-label">通话次数</span>
+          </div>
+        </div>
+        <div class="status-stat">
+          <span class="status-stat-icon"><span class="mask-icon icon-message"></span></span>
+          <div class="status-stat-info">
+            <span class="status-stat-num">15</span>
+            <span class="status-stat-label">短信次数</span>
+          </div>
+        </div>
+      </div>
+      <div class="status-info-row">
+        <span class="status-info-label">最近联系</span>
+        <span class="status-info-value">2026-09-21  15:32</span>
+      </div>
+      <div class="status-info-row" style="border-bottom:none">
+        <span class="status-info-label">添加时间</span>
+        <span class="status-info-value">2026-03-25  09:18</span>
+      </div>
+    </div>
+
+    <!-- 删除 -->
+    <button class="btn btn-danger btn-block" style="justify-content:center" data-show-sheet data-target="delete-confirm-1">
+      删除联系人
+    </button>
+  </div>
+</section>
+
+<!-- ================= 2b. 联系人详情（多电话） contact-detail-multi ================= -->
+<section class="page" data-page="contact-detail-multi">
+  <header class="app-bar">
+    <button class="app-bar-back" data-goto="home">‹</button>
+    <span class="app-bar-title">联系人</span>
+    <button class="app-bar-action" data-goto="contact-edit">编辑</button>
+  </header>
+
+  <div class="page-body">
+    <!-- 顶部头像区 -->
+    <div class="detail-header">
+      <div class="avatar avatar-xl">李</div>
+      <div class="detail-name">李明</div>
+      <div class="detail-company">腾讯科技</div>
+      <div class="tag-row" style="justify-content:center">
+        <span class="tag">客户</span>
+        <span class="tag">重要</span>
+      </div>
+    </div>
+
+    <!-- 操作栏 -->
+    <div class="action-bar">
+      <button class="action-btn" data-show-sheet="dial" data-target="dial-sheet-2">
+        <span class="icon"><span class="mask-icon icon-phone"></span></span>
+        <span>拨号</span>
+      </button>
+      <button class="action-btn" data-show-sheet="sms" data-target="sms-sheet-2">
+        <span class="icon"><span class="mask-icon icon-message"></span></span>
+        <span>短信</span>
+      </button>
+      <button class="action-btn" data-show-share data-target="share-sheet-2">
+        <span class="icon"><span class="mask-icon icon-share"></span></span>
+        <span>分享</span>
+      </button>
+    </div>
+
+    <!-- 电话 -->
+    <div class="list-group">
+      <div class="list-section-header">电话</div>
+      <div class="list-item" style="cursor:default">
+        <div class="list-item-with-icon">
+          <span class="icon icon-sm icon-soft"><span class="mask-icon icon-mobile"></span></span>
+          <div class="list-item-main">
+            <span class="list-item-title">手机</span>
+            <span class="list-item-sub">138 0013 8000</span>
+          </div>
+        </div>
+      </div>
+      <div class="list-item" style="cursor:default">
+        <div class="list-item-with-icon">
+          <span class="icon icon-sm icon-soft"><span class="mask-icon icon-phone-landline"></span></span>
+          <div class="list-item-main">
+            <span class="list-item-title">工作</span>
+            <span class="list-item-sub">0755-8601 3388</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 邮箱 -->
+    <div class="list-group">
+      <div class="list-section-header">邮箱</div>
+      <div class="list-item" style="cursor:default">
+        <div class="list-item-with-icon">
+          <span class="icon icon-sm icon-soft"><span class="mask-icon icon-email"></span></span>
+          <div class="list-item-main">
+            <span class="list-item-title">工作邮箱</span>
+            <span class="list-item-sub">liming@tencent.com</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 备注 -->
+    <div class="list-group">
+      <div class="list-section-header">备注</div>
+      <div class="list-item" style="cursor:default;min-height:auto;padding:var(--spacing-md)">
+        <span class="remark-text">腾讯云合作对接人，负责华东区域销售。建议工作时间拨打工作电话，紧急情况打手机。</span>
+      </div>
+    </div>
+
+    <!-- 状态管理 -->
+    <div class="status-card">
+      <div class="status-card-title">状态管理</div>
+      <div class="status-stats">
+        <div class="status-stat">
+          <span class="status-stat-icon"><span class="mask-icon icon-phone"></span></span>
+          <div class="status-stat-info">
+            <span class="status-stat-num">12</span>
+            <span class="status-stat-label">通话次数</span>
+          </div>
+        </div>
+        <div class="status-stat">
+          <span class="status-stat-icon"><span class="mask-icon icon-message"></span></span>
+          <div class="status-stat-info">
+            <span class="status-stat-num">8</span>
+            <span class="status-stat-label">短信次数</span>
+          </div>
+        </div>
+      </div>
+      <div class="status-info-row">
+        <span class="status-info-label">最近联系</span>
+        <span class="status-info-value">2026-09-20  10:15</span>
+      </div>
+      <div class="status-info-row" style="border-bottom:none">
+        <span class="status-info-label">添加时间</span>
+        <span class="status-info-value">2024-06-15  14:30</span>
+      </div>
+    </div>
+
+    <!-- 删除 -->
+    <button class="btn btn-danger btn-block" style="justify-content:center" data-show-sheet data-target="delete-confirm-2">
+      删除联系人
+    </button>
+  </div>
+
+</section>
+
+<!-- ================= 3. 新增联系人 contact-add ================= -->
+<section class="page" data-page="contact-add">
+  <header class="app-bar">
+    <button class="app-bar-action" data-goto="home">取消</button>
+    <span class="app-bar-title">新建联系人</span>
+    <button class="app-bar-action" data-goto="contact-detail">保存</button>
+  </header>
+
+  <div class="page-body">
+    <!-- 头像上传 -->
+    <div class="avatar-upload">
+      <div class="avatar avatar-xl">+</div>
+      <span class="t-sub">添加头像</span>
+    </div>
+
+    <!-- 基本信息 -->
+    <div class="form-group">
+      <div class="form-row">
+        <span class="form-label">姓名</span>
+        <input class="form-input form-input-left" type="text" placeholder="请输入姓名">
+      </div>
+      <div class="form-row">
+        <span class="form-label">公司</span>
+        <input class="form-input form-input-left" type="text" placeholder="请输入公司">
+      </div>
+    </div>
+
+    <!-- 电话 -->
+    <div class="form-group" data-phone-group>
+      <div class="phone-row">
+        <select class="phone-type-select fixed" disabled>
+          <option value="mobile">手机</option>
+        </select>
+        <input class="phone-input" type="tel" placeholder="请输入手机号">
+      </div>
+      <div class="phone-row phone-add-row" data-add-phone>
+        <span>+ 添加电话</span>
+      </div>
+    </div>
+
+    <!-- 邮箱 -->
+    <div class="form-group">
+      <div class="form-row">
+        <span class="form-label">邮箱</span>
+        <input class="form-input form-input-left" type="email" placeholder="请输入邮箱">
+      </div>
+    </div>
+
+    <!-- 标签 -->
+    <div class="form-group">
+      <div class="form-row">
+        <span class="form-label">标签</span>
+        <div class="tag-row" style="flex:1;justify-content:flex-end">
+          <span class="tag">同事</span>
+          <span class="tag">客户</span>
+          <span class="tag">+</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 备注 -->
+    <div class="form-group">
+      <div class="form-row" style="align-items:flex-start;padding-top:var(--spacing-sm)">
+        <span class="form-label" style="padding-top:10px">备注</span>
+        <textarea class="form-input form-input-left" rows="3" placeholder="添加备注..." style="text-align:left;padding-top:10px;min-height:80px"></textarea>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 4. 编辑联系人 contact-edit ================= -->
+<section class="page" data-page="contact-edit">
+  <header class="app-bar">
+    <button class="app-bar-action" data-goto="contact-detail">取消</button>
+    <span class="app-bar-title">编辑联系人</span>
+    <button class="app-bar-action" data-goto="contact-detail">完成</button>
+  </header>
+
+  <div class="page-body">
+    <div class="avatar-upload">
+      <div class="avatar avatar-xl">张</div>
+      <span class="t-sub">更换头像</span>
+    </div>
+
+    <div class="form-group">
+      <div class="form-row">
+        <span class="form-label">姓名</span>
+        <input class="form-input form-input-left" type="text" value="张伟">
+      </div>
+      <div class="form-row">
+        <span class="form-label">公司</span>
+        <input class="form-input form-input-left" type="text" value="字节跳动">
+      </div>
+    </div>
+
+    <div class="form-group" data-phone-group>
+      <div class="phone-row">
+        <select class="phone-type-select fixed" disabled>
+          <option value="mobile">手机</option>
+        </select>
+        <input class="phone-input" type="tel" value="139 8888 6666">
+      </div>
+      <div class="phone-row phone-add-row" data-add-phone>
+        <span>+ 添加电话</span>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <div class="form-row">
+        <span class="form-label">邮箱</span>
+        <input class="form-input form-input-left" type="email" value="zhangwei@bytedance.com">
+      </div>
+    </div>
+
+    <div class="form-group">
+      <div class="form-row">
+        <span class="form-label">标签</span>
+        <div class="tag-row" style="flex:1;justify-content:flex-end">
+          <span class="tag">同事</span>
+          <span class="tag">重要</span>
+          <span class="tag">+</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <div class="form-row" style="align-items:flex-start;padding-top:var(--spacing-sm)">
+        <span class="form-label" style="padding-top:10px">备注</span>
+        <textarea class="form-input form-input-left" rows="3" style="text-align:left;padding-top:10px;min-height:80px">负责抖音电商产品方向，2024年Q1对接过直播带货项目。习惯下午3点后通话。</textarea>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 5. 搜索结果 search ================= -->
+<section class="page" data-page="search">
+  <header class="app-bar" style="border-bottom:none;margin-bottom:0">
+    <button class="app-bar-action" data-goto="home">取消</button>
+    <div style="flex:1;margin-left:var(--spacing-sm)">
+      <div class="search-box" style="margin-bottom:0">
+        <div class="search-icon"></div>
+        <input type="text" placeholder="搜索联系人" value="张" autofocus>
+      </div>
+    </div>
+  </header>
+
+  <div class="page-body" style="padding-top:var(--spacing-sm)">
+    <div class="t-sub" style="padding:0 var(--spacing-xs);margin-bottom:var(--spacing-xs)">找到 3 位联系人</div>
+
+    <div class="list-group">
+      <button class="list-item" data-goto="contact-detail">
+        <div class="list-item-with-icon">
+          <div class="avatar avatar-sm">张</div>
+          <div class="list-item-main">
+            <span class="list-item-title">张伟</span>
+            <span class="list-item-sub">139 8888 6666</span>
+          </div>
+        </div>
+        <span class="list-item-arrow">›</span>
+      </button>
+      <button class="list-item" data-goto="contact-detail">
+        <div class="list-item-with-icon">
+          <div class="avatar avatar-sm">张</div>
+          <div class="list-item-main">
+            <span class="list-item-title">张敏</span>
+            <span class="list-item-sub">132 3333 4444</span>
+          </div>
+        </div>
+        <span class="list-item-arrow">›</span>
+      </button>
+      <button class="list-item" data-goto="contact-detail">
+        <div class="list-item-with-icon">
+          <div class="avatar avatar-sm">张</div>
+          <div class="list-item-main">
+            <span class="list-item-title">张磊</span>
+            <span class="list-item-sub">138 0000 1234</span>
+          </div>
+        </div>
+        <span class="list-item-arrow">›</span>
+      </button>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 6. 导入通讯录-授权 import-system ================= -->
+<section class="page" data-page="import-system">
+  <header class="app-bar">
+    <button class="app-bar-back" data-goto="settings">‹</button>
+    <span class="app-bar-title">导入通讯录</span>
+    <span style="width:32px"></span>
+  </header>
+
+  <div class="page-body">
+    <div class="card" style="margin-top:var(--spacing-lg);text-align:center">
+      <div style="width:72px;height:72px;margin:0 auto var(--spacing-md);
+        display:flex;align-items:center;justify-content:center;
+        border-radius:var(--radius-lg);background:rgba(28,108,245,.1)">
+        <span class="icon icon-xl" style="background:transparent;color:var(--color-primary)">📒</span>
+      </div>
+      <div class="card-title" style="font-size:var(--font-size-lg)">访问通讯录</div>
+      <p class="card-desc" style="margin-top:var(--spacing-sm);line-height:1.7">
+        "智能通讯录" 想访问您的通讯录<br>
+        用于导入手机联系人到本地管理
+      </p>
+    </div>
+
+    <div class="card" style="margin-top:var(--spacing-md)">
+      <div class="card-title">隐私说明</div>
+      <p class="card-desc" style="line-height:1.7">
+        • 通讯录数据仅保存在本设备本地<br>
+        • 不会上传到任何服务器<br>
+        • 您可以随时在设置中撤销授权
+      </p>
+    </div>
+
+    <div style="margin-top:var(--spacing-xl);display:flex;flex-direction:column;gap:var(--spacing-sm)">
+      <button class="btn btn-primary btn-block" data-goto="import-loading">
+        确认授权
+      </button>
+      <button class="btn btn-ghost btn-block" data-goto="settings">
+        暂不允许
+      </button>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 6a. 导入-读取中 import-loading ================= -->
+<section class="page" data-page="import-loading">
+  <header class="app-bar">
+    <button class="app-bar-back" data-goto="settings">‹</button>
+    <span class="app-bar-title">导入通讯录</span>
+    <span style="width:32px"></span>
+  </header>
+
+  <div class="page-body">
+    <div class="loading-state" style="padding-top:var(--spacing-xl)">
+      <div class="spinner"></div>
+      <div class="loading-text" style="font-size:var(--font-size-base);margin-top:var(--spacing-md)">
+        正在读取通讯录…
+      </div>
+      <div class="t-cap" style="margin-top:var(--spacing-xs)">请稍候，正在获取通讯录数据</div>
+    </div>
+  </div>
+
+  <script>
+  (function(){
+    var page = document.querySelector('[data-page="import-loading"]');
+    if (!page) return;
+    var timer = null;
+    function startTimer(){
+      if (!page.hasAttribute('data-active')) return;
+      clearTimeout(timer);
+      timer = setTimeout(function(){
+        location.hash = '#/import-list';
+      }, 3000);
+    }
+    var mo = new MutationObserver(startTimer);
+    mo.observe(page, { attributes: true, attributeFilter: ['data-active'] });
+    startTimer();
+  })();
+  </script>
+</section>
+
+<!-- ================= 6b. 导入-通讯录列表 import-list ================= -->
+<section class="page" data-page="import-list">
+  <header class="app-bar">
+    <button class="app-bar-back" data-goto="settings">‹</button>
+    <span class="app-bar-title">导入通讯录</span>
+    <span style="width:32px"></span>
+  </header>
+
+  <div class="page-body" style="padding-bottom:88px">
+    <div class="t-sub" style="padding:0 var(--spacing-xs);margin-bottom:var(--spacing-sm)">
+      共读取到 8 位联系人
+    </div>
+
+    <div class="list-group">
+      <div class="list-item" style="cursor:default">
+        <div class="list-item-with-icon">
+          <div class="avatar avatar-sm">安</div>
+          <div class="list-item-main">
+            <span class="list-item-title">安然</span>
+            <span class="list-item-sub">131 2222 3333</span>
+          </div>
+        </div>
+        <span class="list-item-arrow" style="visibility:hidden">✓</span>
+      </div>
+      <div class="list-item" style="cursor:default">
+        <div class="list-item-with-icon">
+          <div class="avatar avatar-sm">李</div>
+          <div class="list-item-main">
+            <span class="list-item-title">李明</span>
+            <span class="list-item-sub">138 0013 8000</span>
+          </div>
+        </div>
+        <span class="list-item-arrow" style="visibility:hidden">✓</span>
+      </div>
+      <div class="list-item" style="cursor:default">
+        <div class="list-item-with-icon">
+          <div class="avatar avatar-sm">刘</div>
+          <div class="list-item-main">
+            <span class="list-item-title">刘洋</span>
+            <span class="list-item-sub">137 4444 5555</span>
+          </div>
+        </div>
+        <span class="list-item-arrow" style="visibility:hidden">✓</span>
+      </div>
+      <div class="list-item" style="cursor:default">
+        <div class="list-item-with-icon">
+          <div class="avatar avatar-sm">王</div>
+          <div class="list-item-main">
+            <span class="list-item-title">王磊</span>
+            <span class="list-item-sub">186 1234 5678</span>
+          </div>
+        </div>
+        <span class="list-item-arrow" style="visibility:hidden">✓</span>
+      </div>
+      <div class="list-item" style="cursor:default">
+        <div class="list-item-with-icon">
+          <div class="avatar avatar-sm">吴</div>
+          <div class="list-item-main">
+            <span class="list-item-title">吴彦</span>
+            <span class="list-item-sub">133 7777 8888</span>
+          </div>
+        </div>
+        <span class="list-item-arrow" style="visibility:hidden">✓</span>
+      </div>
+      <div class="list-item" style="cursor:default">
+        <div class="list-item-with-icon">
+          <div class="avatar avatar-sm">张</div>
+          <div class="list-item-main">
+            <span class="list-item-title">张伟</span>
+            <span class="list-item-sub">139 8888 6666</span>
+          </div>
+        </div>
+        <span class="list-item-arrow" style="visibility:hidden">✓</span>
+      </div>
+      <div class="list-item" style="cursor:default">
+        <div class="list-item-with-icon">
+          <div class="avatar avatar-sm">赵</div>
+          <div class="list-item-main">
+            <span class="list-item-title">赵敏</span>
+            <span class="list-item-sub">136 9999 0000</span>
+          </div>
+        </div>
+        <span class="list-item-arrow" style="visibility:hidden">✓</span>
+      </div>
+      <div class="list-item" style="cursor:default;border-bottom:none">
+        <div class="list-item-with-icon">
+          <div class="avatar avatar-sm">周</div>
+          <div class="list-item-main">
+            <span class="list-item-title">周杰</span>
+            <span class="list-item-sub">135 6666 8888</span>
+          </div>
+        </div>
+        <span class="list-item-arrow" style="visibility:hidden">✓</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 底部固定按钮 -->
+  <div style="position:absolute;left:0;right:0;bottom:0;
+    padding:var(--spacing-sm) var(--spacing-md) var(--spacing-md);
+    background:var(--color-surface);border-top:1px solid var(--color-border);">
+    <button class="btn btn-primary btn-block" data-goto="import-progress">
+      确认导入 8 位联系人
+    </button>
+  </div>
+</section>
+
+<!-- ================= 6c. 导入-进度/成功 import-progress ================= -->
+<section class="page" data-page="import-progress">
+  <header class="app-bar">
+    <span style="width:32px"></span>
+    <span class="app-bar-title">导入通讯录</span>
+    <span style="width:32px"></span>
+  </header>
+
+  <div class="page-body">
+    <!-- 导入中状态（默认显示） -->
+    <div id="import-progress-state">
+      <div class="loading-state" style="padding-top:var(--spacing-xl)">
+        <div class="spinner"></div>
+        <div class="loading-text" style="font-size:var(--font-size-base);margin-top:var(--spacing-md)">
+          正在导入…
+        </div>
+      </div>
+
+      <div class="progress" style="margin-top:var(--spacing-lg)">
+        <div class="progress-head">
+          <span class="progress-label">导入进度</span>
+          <span class="progress-value" id="import-progress-text">0 / 8</span>
+        </div>
+        <div class="progress-track">
+          <div class="progress-fill" id="import-progress-fill" style="width:0%"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 导入成功状态（JS切换显示） -->
+    <div id="import-success-state" style="display:none">
+      <div style="display:flex;flex-direction:column;align-items:center;
+        padding:var(--spacing-xl) 0 var(--spacing-lg);text-align:center">
+        <div style="width:72px;height:72px;margin-bottom:var(--spacing-md);
+          display:flex;align-items:center;justify-content:center;
+          border-radius:var(--radius-full);background:rgba(34,197,94,.15)">
+          <span style="font-size:36px;color:#22C55E">✓</span>
+        </div>
+        <div class="t-title" style="font-size:var(--font-size-xl);font-weight:700">
+          导入成功
+        </div>
+        <div class="t-sub" style="margin-top:var(--spacing-xs);line-height:1.6">
+          已成功导入 8 位联系人<br>
+          现在可以在通讯录中查看了
+        </div>
+      </div>
+
+      <button class="btn btn-primary btn-block" data-goto="home">
+        查看联系人
+      </button>
+    </div>
+  </div>
+
+  <script>
+  (function(){
+    var page = document.querySelector('[data-page="import-progress"]');
+    if (!page) return;
+    function startImport(){
+      if (!page.hasAttribute('data-active')) return;
+      var fill = document.getElementById('import-progress-fill');
+      var text = document.getElementById('import-progress-text');
+      var progState = document.getElementById('import-progress-state');
+      var succState = document.getElementById('import-success-state');
+      if (!fill) return;
+      var p = 0;
+      var timer = setInterval(function(){
+        p += 1;
+        if (p >= 8) {
+          p = 8;
+          clearInterval(timer);
+          // 延迟一下再切成功态
+          setTimeout(function(){
+            progState.style.display = 'none';
+            succState.style.display = 'block';
+          }, 300);
+        }
+        fill.style.width = (p / 8 * 100) + '%';
+        text.textContent = p + ' / 8';
+      }, 350);
+    }
+    // 页面激活时触发
+    var mo = new MutationObserver(function(){
+      if (page.hasAttribute('data-active')) {
+        // 重置
+        var fill = document.getElementById('import-progress-fill');
+        var text = document.getElementById('import-progress-text');
+        var progState = document.getElementById('import-progress-state');
+        var succState = document.getElementById('import-success-state');
+        if (fill) fill.style.width = '0%';
+        if (text) text.textContent = '0 / 8';
+        if (progState) progState.style.display = 'block';
+        if (succState) succState.style.display = 'none';
+        setTimeout(startImport, 300);
+      }
+    });
+    mo.observe(page, { attributes: true, attributeFilter: ['data-active'] });
+  })();
+  </script>
+</section>
+
+<!-- ================= 8. 粘贴识别 import-paste ================= -->
+<section class="page" data-page="import-paste">
+  <header class="app-bar">
+    <button class="app-bar-back" data-goto="home">‹</button>
+    <span class="app-bar-title">粘贴识别</span>
+    <span style="width:32px"></span>
+  </header>
+
+  <div class="page-body">
+    <p class="t-sub" style="line-height:1.6">粘贴包含联系人信息的文本，可自动识别姓名、电话、公司、邮箱等字段，姓名和电话为必填。</p>
+
+    <textarea class="paste-box" id="paste-input" placeholder="在此粘贴联系人文本，例如：
+张伟 13988886666
+字节跳动
+zhangwei@bytedance.com"></textarea>
+
+    <!-- 识别中 loading -->
+    <div class="recognize-loading" id="paste-loading" style="display:none;align-items:center;justify-content:center;gap:var(--spacing-sm);padding:var(--spacing-lg) 0;color:var(--color-textSecondary);font-size:var(--font-size-sm)">
+      <span class="loading-spinner" style="width:16px;height:16px;border:2px solid var(--color-border);border-top-color:var(--color-primary);border-radius:50%;animation:spin .8s linear infinite;display:inline-block"></span>
+      正在识别...
+    </div>
+
+    <!-- 识别成功结果 -->
+    <div class="recognize-result" id="paste-result" style="display:none">
+      <div class="recognize-title">
+        <span class="icon icon-sm">✓</span>
+        已识别 1 位联系人
+      </div>
+      <div class="list-item" style="padding:var(--spacing-sm) 0;border:none;cursor:default">
+        <div class="list-item-with-icon">
+          <div class="avatar avatar-sm">张</div>
+          <div class="list-item-main">
+            <span class="list-item-title">张伟</span>
+            <span class="list-item-sub">139 8888 6666</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 未识别结果 -->
+    <div class="recognize-empty" id="paste-empty" style="display:none;align-items:center;gap:var(--spacing-sm);padding:var(--spacing-lg) var(--spacing-md);background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--radius-lg);color:var(--color-textSecondary);font-size:var(--font-size-sm)">
+      <span style="width:20px;height:20px;border-radius:50%;background:rgba(244,63,94,.12);color:#F43F5E;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;flex:none">!</span>
+      没有识别到相关信息
+    </div>
+
+    <button class="btn btn-primary btn-block" id="paste-save-btn" data-goto="contact-detail" disabled style="opacity:.4;cursor:not-allowed">
+      保存
+    </button>
+  </div>
+
+  <script>
+  (function(){
+    var page = document.querySelector('[data-page="import-paste"]');
+    if (!page) return;
+    var input = document.getElementById('paste-input');
+    var loading = document.getElementById('paste-loading');
+    var result = document.getElementById('paste-result');
+    var empty = document.getElementById('paste-empty');
+    var saveBtn = document.getElementById('paste-save-btn');
+    var timer = null;
+
+    // 检测文本中是否包含手机号和姓名
+    function hasValidInfo(text) {
+      // 手机号：1开头的11位数字（允许中间有空格、横线等分隔符）
+      var phoneRegex = /1[3-9]\d[\s\-]?\d{4}[\s\-]?\d{4}/;
+      var hasPhone = phoneRegex.test(text);
+
+      // 姓名：2-4个中文字符，或英文姓名（2个及以上字母，含空格）
+      var nameRegex = /[一-龥]{2,4}/;
+      var hasName = nameRegex.test(text);
+
+      return hasPhone && hasName;
+    }
+
+    function resetState() {
+      loading.style.display = 'none';
+      result.style.display = 'none';
+      empty.style.display = 'none';
+      saveBtn.disabled = true;
+      saveBtn.style.opacity = '.4';
+      saveBtn.style.cursor = 'not-allowed';
+    }
+
+    function startRecognize() {
+      var text = input.value.trim();
+      if (timer) { clearTimeout(timer); timer = null; }
+      if (!text) {
+        resetState();
+        return;
+      }
+      // 显示 loading
+      loading.style.display = 'flex';
+      result.style.display = 'none';
+      empty.style.display = 'none';
+      saveBtn.disabled = true;
+      saveBtn.style.opacity = '.4';
+      saveBtn.style.cursor = 'not-allowed';
+      // 模拟识别过程
+      timer = setTimeout(function(){
+        loading.style.display = 'none';
+        if (hasValidInfo(text)) {
+          // 识别成功
+          result.style.display = 'block';
+          saveBtn.disabled = false;
+          saveBtn.style.opacity = '1';
+          saveBtn.style.cursor = 'pointer';
+        } else {
+          // 未识别到
+          empty.style.display = 'flex';
+        }
+      }, 1000);
+    }
+
+    input.addEventListener('input', startRecognize);
+    input.addEventListener('paste', function(){
+      setTimeout(startRecognize, 10);
+    });
+
+    // 保存按钮：禁用时阻止跳转
+    saveBtn.addEventListener('click', function(e){
+      if (saveBtn.disabled) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+    }, true);
+
+    // 页面重新激活时重置为初始状态
+    var mo = new MutationObserver(function(){
+      if (!page.hasAttribute('data-active')) {
+        input.value = '';
+        resetState();
+        if (timer) { clearTimeout(timer); timer = null; }
+      }
+    });
+    mo.observe(page, { attributes: true, attributeFilter: ['data-active'] });
+  })();
+  </script>
+</section>
+
+<!-- ================= 9. 名片 OCR import-ocr ================= -->
+<section class="page" data-page="import-ocr">
+  <header class="app-bar">
+    <button class="app-bar-back" data-goto="home">‹</button>
+    <span class="app-bar-title">名片 OCR</span>
+    <span style="width:32px"></span>
+  </header>
+
+  <div class="page-body">
+    <p class="t-sub" style="line-height:1.6">拍摄或选择名片照片，自动识别并录入联系人信息</p>
+
+    <!-- 拍照/选图区域 -->
+    <div style="
+      background:var(--color-background);
+      border:2px dashed var(--color-border);
+      border-radius:var(--radius-lg);
+      padding:var(--spacing-xl) var(--spacing-md);
+      display:flex;flex-direction:column;align-items:center;gap:var(--spacing-sm);
+      text-align:center;
+      margin-bottom:var(--spacing-md);
+    ">
+      <span class="icon icon-xl" style="background:var(--color-textSecondary);opacity:.3">📷</span>
+      <div class="t-title">拍摄名片</div>
+      <div class="t-sub">将名片放入框内，保持光线充足</div>
+    </div>
+
+    <div class="row" style="gap:var(--spacing-sm);margin-bottom:var(--spacing-md)">
+      <button class="btn btn-secondary" style="flex:1" id="ocr-take-btn">
+        拍照
+      </button>
+      <button class="btn btn-secondary" style="flex:1" id="ocr-album-btn">
+        从相册选择
+      </button>
+    </div>
+
+    <!-- 识别中 loading -->
+    <div class="recognize-loading" id="ocr-loading" style="display:none;align-items:center;justify-content:center;gap:var(--spacing-sm);padding:var(--spacing-lg) 0;color:var(--color-textSecondary);font-size:var(--font-size-sm)">
+      <span class="loading-spinner" style="width:16px;height:16px;border:2px solid var(--color-border);border-top-color:var(--color-primary);border-radius:50%;animation:spin .8s linear infinite;display:inline-block"></span>
+      正在识别...
+    </div>
+
+    <!-- 识别成功结果 -->
+    <div class="recognize-result" id="ocr-result" style="display:none">
+      <div class="recognize-title">
+        <span class="icon icon-sm">✓</span>
+        识别结果
+      </div>
+      <div class="list-item" style="padding:var(--spacing-sm) 0;border:none;cursor:default">
+        <div class="list-item-with-icon">
+          <div class="avatar avatar-sm">李</div>
+          <div class="list-item-main">
+            <span class="list-item-title">李明</span>
+            <span class="list-item-sub">138 0013 8000</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 未识别结果 -->
+    <div class="recognize-empty" id="ocr-empty" style="display:none;align-items:center;gap:var(--spacing-sm);padding:var(--spacing-lg) var(--spacing-md);background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--radius-lg);color:var(--color-textSecondary);font-size:var(--font-size-sm)">
+      <span style="width:20px;height:20px;border-radius:50%;background:rgba(244,63,94,.12);color:#F43F5E;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;flex:none">!</span>
+      没有识别到相关信息
+    </div>
+
+    <button class="btn btn-primary btn-block" id="ocr-save-btn" data-goto="contact-detail" disabled style="opacity:.4;cursor:not-allowed">
+      保存
+    </button>
+  </div>
+
+  <script>
+  (function(){
+    var page = document.querySelector('[data-page="import-ocr"]');
+    if (!page) return;
+    var takeBtn = document.getElementById('ocr-take-btn');
+    var albumBtn = document.getElementById('ocr-album-btn');
+    var loading = document.getElementById('ocr-loading');
+    var result = document.getElementById('ocr-result');
+    var empty = document.getElementById('ocr-empty');
+    var saveBtn = document.getElementById('ocr-save-btn');
+    var timer = null;
+
+    function resetState() {
+      loading.style.display = 'none';
+      result.style.display = 'none';
+      empty.style.display = 'none';
+      saveBtn.disabled = true;
+      saveBtn.style.opacity = '.4';
+      saveBtn.style.cursor = 'not-allowed';
+    }
+
+    function startRecognize(success) {
+      if (timer) { clearTimeout(timer); timer = null; }
+      // 显示 loading，隐藏结果
+      resetState();
+      loading.style.display = 'flex';
+      // 模拟识别过程
+      timer = setTimeout(function(){
+        loading.style.display = 'none';
+        if (success) {
+          result.style.display = 'block';
+          saveBtn.disabled = false;
+          saveBtn.style.opacity = '1';
+          saveBtn.style.cursor = 'pointer';
+        } else {
+          empty.style.display = 'flex';
+        }
+      }, 1500);
+    }
+
+    takeBtn.addEventListener('click', function(){ startRecognize(true); });
+    albumBtn.addEventListener('click', function(){ startRecognize(false); });
+
+    // 保存按钮：禁用时阻止跳转
+    saveBtn.addEventListener('click', function(e){
+      if (saveBtn.disabled) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+    }, true);
+
+    // 页面重新激活时重置为初始状态
+    var mo = new MutationObserver(function(){
+      if (!page.hasAttribute('data-active')) {
+        resetState();
+        if (timer) { clearTimeout(timer); timer = null; }
+      }
+    });
+    mo.observe(page, { attributes: true, attributeFilter: ['data-active'] });
+  })();
+  </script>
+</section>
+
+<!-- ================= 10. 重复联系人扫描 duplicate-scan ================= -->
+<section class="page" data-page="duplicate-scan">
+  <header class="app-bar">
+    <button class="app-bar-back" data-goto="settings">‹</button>
+    <span class="app-bar-title">联系人去重</span>
+    <span style="width:32px"></span>
+  </header>
+
+  <div class="page-body">
+    <p class="t-sub" style="line-height:1.6;margin-bottom:12px">
+      共发现 10 组疑似重复联系人，按等级分组展示。合并前请仔细核对，确保数据不丢失。
+    </p>
+
+    <!-- Tab 切换 -->
+    <div class="dup-tabs" style="display:flex;background:var(--color-background);border-radius:var(--radius-full);padding:4px;margin-bottom:12px">
+      <button class="dup-tab active" data-dup-tab="high" style="flex:1;height:36px;border:none;border-radius:var(--radius-full);background:var(--color-surface);color:var(--color-textPrimary);font-size:var(--font-size-sm);font-weight:500;cursor:pointer;font-family:inherit">
+        高相似 · 4
+      </button>
+      <button class="dup-tab" data-dup-tab="mid" style="flex:1;height:36px;border:none;border-radius:var(--radius-full);background:transparent;color:var(--color-textSecondary);font-size:var(--font-size-sm);font-weight:500;cursor:pointer;font-family:inherit">
+        中相似 · 4
+      </button>
+      <button class="dup-tab" data-dup-tab="low" style="flex:1;height:36px;border:none;border-radius:var(--radius-full);background:transparent;color:var(--color-textSecondary);font-size:var(--font-size-sm);font-weight:500;cursor:pointer;font-family:inherit">
+        轻相似 · 2
+      </button>
+    </div>
+
+    <!-- 高风险重复 -->
+    <div class="dup-tab-panel" data-dup-panel="high">
+      <div class="dup-card-list" style="display:flex;flex-direction:column;gap:var(--spacing-sm)">
+
+        <!-- 高1：姓名相同 + 手机号相同 -->
+        <div class="dup-card" style="display:flex;align-items:center;gap:12px;background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--radius-lg);padding:14px 16px;cursor:pointer" data-goto="duplicate-merge">
+          <div style="flex:1;min-width:0">
+            <div style="display:flex;align-items:center;gap:12px">
+              <div class="avatar avatar-sm">张</div>
+              <div style="flex:1;min-width:0">
+                <div class="list-item-title" style="font-size:var(--font-size-base)">张伟</div>
+                <div class="list-item-sub" style="margin-top:2px">139 8888 6666</div>
+              </div>
+            </div>
+            <div style="display:flex;align-items:center;justify-content:center;padding:8px 0">
+              <span style="color:var(--color-textSecondary);font-size:12px;font-weight:600">VS</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:12px">
+              <div class="avatar avatar-sm">张</div>
+              <div style="flex:1;min-width:0">
+                <div class="list-item-title" style="font-size:var(--font-size-base)">张伟</div>
+                <div class="list-item-sub" style="margin-top:2px">139 8888 6666</div>
+              </div>
+            </div>
+          </div>
+          <span class="list-item-arrow" style="color:var(--color-textSecondary);font-size:20px;flex:none">›</span>
+        </div>
+
+        <!-- 高2：姓名相同 + 手机号相同 -->
+        <div class="dup-card" style="display:flex;align-items:center;gap:12px;background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--radius-lg);padding:14px 16px;cursor:pointer" data-goto="duplicate-merge">
+          <div style="flex:1;min-width:0">
+            <div style="display:flex;align-items:center;gap:12px">
+              <div class="avatar avatar-sm">李</div>
+              <div style="flex:1;min-width:0">
+                <div class="list-item-title" style="font-size:var(--font-size-base)">李明</div>
+                <div class="list-item-sub" style="margin-top:2px">138 0013 8000</div>
+              </div>
+            </div>
+            <div style="display:flex;align-items:center;justify-content:center;padding:8px 0">
+              <span style="color:var(--color-textSecondary);font-size:12px;font-weight:600">VS</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:12px">
+              <div class="avatar avatar-sm">李</div>
+              <div style="flex:1;min-width:0">
+                <div class="list-item-title" style="font-size:var(--font-size-base)">李明</div>
+                <div class="list-item-sub" style="margin-top:2px">138 0013 8000</div>
+              </div>
+            </div>
+          </div>
+          <span class="list-item-arrow" style="color:var(--color-textSecondary);font-size:20px;flex:none">›</span>
+        </div>
+
+        <!-- 高3：手机号相同 + 姓名不同 -->
+        <div class="dup-card" style="display:flex;align-items:center;gap:12px;background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--radius-lg);padding:14px 16px;cursor:pointer" data-goto="duplicate-merge">
+          <div style="flex:1;min-width:0">
+            <div style="display:flex;align-items:center;gap:12px">
+              <div class="avatar avatar-sm">王</div>
+              <div style="flex:1;min-width:0">
+                <div class="list-item-title" style="font-size:var(--font-size-base)">王磊</div>
+                <div class="list-item-sub" style="margin-top:2px">186 1234 5678</div>
+              </div>
+            </div>
+            <div style="display:flex;align-items:center;justify-content:center;padding:8px 0">
+              <span style="color:var(--color-textSecondary);font-size:12px;font-weight:600">VS</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:12px">
+              <div class="avatar avatar-sm">王</div>
+              <div style="flex:1;min-width:0">
+                <div class="list-item-title" style="font-size:var(--font-size-base)">王雷</div>
+                <div class="list-item-sub" style="margin-top:2px">186 1234 5678</div>
+              </div>
+            </div>
+          </div>
+          <span class="list-item-arrow" style="color:var(--color-textSecondary);font-size:20px;flex:none">›</span>
+        </div>
+
+        <!-- 高4：手机号相同 + 姓名不同 -->
+        <div class="dup-card" style="display:flex;align-items:center;gap:12px;background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--radius-lg);padding:14px 16px;cursor:pointer" data-goto="duplicate-merge">
+          <div style="flex:1;min-width:0">
+            <div style="display:flex;align-items:center;gap:12px">
+              <div class="avatar avatar-sm">刘</div>
+              <div style="flex:1;min-width:0">
+                <div class="list-item-title" style="font-size:var(--font-size-base)">刘芳</div>
+                <div class="list-item-sub" style="margin-top:2px">136 7788 9900</div>
+              </div>
+            </div>
+            <div style="display:flex;align-items:center;justify-content:center;padding:8px 0">
+              <span style="color:var(--color-textSecondary);font-size:12px;font-weight:600">VS</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:12px">
+              <div class="avatar avatar-sm">刘</div>
+              <div style="flex:1;min-width:0">
+                <div class="list-item-title" style="font-size:var(--font-size-base)">刘方</div>
+                <div class="list-item-sub" style="margin-top:2px">136 7788 9900</div>
+              </div>
+            </div>
+          </div>
+          <span class="list-item-arrow" style="color:var(--color-textSecondary);font-size:20px;flex:none">›</span>
+        </div>
+
+      </div>
+      <button class="btn btn-primary btn-block" style="margin-top:var(--spacing-md)" data-show-sheet data-target="merge-all-confirm">
+        一键合并
+      </button>
+    </div>
+
+    <!-- 中风险重复 -->
+    <div class="dup-tab-panel" data-dup-panel="mid" style="display:none">
+      <div class="dup-card-list" style="display:flex;flex-direction:column;gap:var(--spacing-sm)">
+
+        <!-- 中1：姓名相同 + 公司相同 -->
+        <div class="dup-card" style="display:flex;align-items:center;gap:12px;background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--radius-lg);padding:14px 16px;cursor:pointer" data-goto="duplicate-merge">
+          <div style="flex:1;min-width:0">
+            <div style="display:flex;align-items:center;gap:12px">
+              <div class="avatar avatar-sm">陈</div>
+              <div style="flex:1;min-width:0">
+                <div class="list-item-title" style="font-size:var(--font-size-base)">陈静</div>
+                <div class="list-item-sub" style="margin-top:2px">137 2233 4455 · 腾讯科技</div>
+              </div>
+            </div>
+            <div style="display:flex;align-items:center;justify-content:center;padding:8px 0">
+              <span style="color:var(--color-textSecondary);font-size:12px;font-weight:600">VS</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:12px">
+              <div class="avatar avatar-sm">陈</div>
+              <div style="flex:1;min-width:0">
+                <div class="list-item-title" style="font-size:var(--font-size-base)">陈静</div>
+                <div class="list-item-sub" style="margin-top:2px">159 8877 6655 · 腾讯科技</div>
+              </div>
+            </div>
+          </div>
+          <span class="list-item-arrow" style="color:var(--color-textSecondary);font-size:20px;flex:none">›</span>
+        </div>
+
+        <!-- 中2：姓名相同 + 公司相同 -->
+        <div class="dup-card" style="display:flex;align-items:center;gap:12px;background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--radius-lg);padding:14px 16px;cursor:pointer" data-goto="duplicate-merge">
+          <div style="flex:1;min-width:0">
+            <div style="display:flex;align-items:center;gap:12px">
+              <div class="avatar avatar-sm">杨</div>
+              <div style="flex:1;min-width:0">
+                <div class="list-item-title" style="font-size:var(--font-size-base)">杨磊</div>
+                <div class="list-item-sub" style="margin-top:2px">188 9900 1122 · 字节跳动</div>
+              </div>
+            </div>
+            <div style="display:flex;align-items:center;justify-content:center;padding:8px 0">
+              <span style="color:var(--color-textSecondary);font-size:12px;font-weight:600">VS</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:12px">
+              <div class="avatar avatar-sm">杨</div>
+              <div style="flex:1;min-width:0">
+                <div class="list-item-title" style="font-size:var(--font-size-base)">杨磊</div>
+                <div class="list-item-sub" style="margin-top:2px">131 2233 4455 · 字节跳动</div>
+              </div>
+            </div>
+          </div>
+          <span class="list-item-arrow" style="color:var(--color-textSecondary);font-size:20px;flex:none">›</span>
+        </div>
+
+        <!-- 中3：姓名相同 + 手机号不同 -->
+        <div class="dup-card" style="display:flex;align-items:center;gap:12px;background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--radius-lg);padding:14px 16px;cursor:pointer" data-goto="duplicate-merge">
+          <div style="flex:1;min-width:0">
+            <div style="display:flex;align-items:center;gap:12px">
+              <div class="avatar avatar-sm">王</div>
+              <div style="flex:1;min-width:0">
+                <div class="list-item-title" style="font-size:var(--font-size-base)">王芳</div>
+                <div class="list-item-sub" style="margin-top:2px">135 6677 8899</div>
+              </div>
+            </div>
+            <div style="display:flex;align-items:center;justify-content:center;padding:8px 0">
+              <span style="color:var(--color-textSecondary);font-size:12px;font-weight:600">VS</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:12px">
+              <div class="avatar avatar-sm">王</div>
+              <div style="flex:1;min-width:0">
+                <div class="list-item-title" style="font-size:var(--font-size-base)">王芳</div>
+                <div class="list-item-sub" style="margin-top:2px">158 9988 7766</div>
+              </div>
+            </div>
+          </div>
+          <span class="list-item-arrow" style="color:var(--color-textSecondary);font-size:20px;flex:none">›</span>
+        </div>
+
+        <!-- 中4：姓名相同 + 手机号不同 -->
+        <div class="dup-card" style="display:flex;align-items:center;gap:12px;background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--radius-lg);padding:14px 16px;cursor:pointer" data-goto="duplicate-merge">
+          <div style="flex:1;min-width:0">
+            <div style="display:flex;align-items:center;gap:12px">
+              <div class="avatar avatar-sm">张</div>
+              <div style="flex:1;min-width:0">
+                <div class="list-item-title" style="font-size:var(--font-size-base)">张炜</div>
+                <div class="list-item-sub" style="margin-top:2px">133 2211 3344</div>
+              </div>
+            </div>
+            <div style="display:flex;align-items:center;justify-content:center;padding:8px 0">
+              <span style="color:var(--color-textSecondary);font-size:12px;font-weight:600">VS</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:12px">
+              <div class="avatar avatar-sm">张</div>
+              <div style="flex:1;min-width:0">
+                <div class="list-item-title" style="font-size:var(--font-size-base)">张炜</div>
+                <div class="list-item-sub" style="margin-top:2px">182 6677 8899</div>
+              </div>
+            </div>
+          </div>
+          <span class="list-item-arrow" style="color:var(--color-textSecondary);font-size:20px;flex:none">›</span>
+        </div>
+
+      </div>
+      <button class="btn btn-primary btn-block" style="margin-top:var(--spacing-md)" data-show-sheet data-target="merge-all-confirm">
+        一键合并
+      </button>
+    </div>
+
+    <!-- 轻风险重复 -->
+    <div class="dup-tab-panel" data-dup-panel="low" style="display:none">
+      <div class="dup-card-list" style="display:flex;flex-direction:column;gap:var(--spacing-sm)">
+
+        <!-- 轻1：仅姓名高度相似 -->
+        <div class="dup-card" style="display:flex;align-items:center;gap:12px;background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--radius-lg);padding:14px 16px;cursor:pointer" data-goto="duplicate-merge">
+          <div style="flex:1;min-width:0">
+            <div style="display:flex;align-items:center;gap:12px">
+              <div class="avatar avatar-sm">刘</div>
+              <div style="flex:1;min-width:0">
+                <div class="list-item-title" style="font-size:var(--font-size-base)">刘洋</div>
+                <div class="list-item-sub" style="margin-top:2px">135 1122 3344 · 阿里巴巴</div>
+              </div>
+            </div>
+            <div style="display:flex;align-items:center;justify-content:center;padding:8px 0">
+              <span style="color:var(--color-textSecondary);font-size:12px;font-weight:600">VS</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:12px">
+              <div class="avatar avatar-sm">刘</div>
+              <div style="flex:1;min-width:0">
+                <div class="list-item-title" style="font-size:var(--font-size-base)">刘阳</div>
+                <div class="list-item-sub" style="margin-top:2px">139 7788 9900 · 腾讯科技</div>
+              </div>
+            </div>
+          </div>
+          <span class="list-item-arrow" style="color:var(--color-textSecondary);font-size:20px;flex:none">›</span>
+        </div>
+
+        <!-- 轻2：仅姓名高度相似 -->
+        <div class="dup-card" style="display:flex;align-items:center;gap:12px;background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--radius-lg);padding:14px 16px;cursor:pointer" data-goto="duplicate-merge">
+          <div style="flex:1;min-width:0">
+            <div style="display:flex;align-items:center;gap:12px">
+              <div class="avatar avatar-sm">赵</div>
+              <div style="flex:1;min-width:0">
+                <div class="list-item-title" style="font-size:var(--font-size-base)">赵鹏</div>
+                <div class="list-item-sub" style="margin-top:2px">186 5566 7788 · 字节跳动</div>
+              </div>
+            </div>
+            <div style="display:flex;align-items:center;justify-content:center;padding:8px 0">
+              <span style="color:var(--color-textSecondary);font-size:12px;font-weight:600">VS</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:12px">
+              <div class="avatar avatar-sm">赵</div>
+              <div style="flex:1;min-width:0">
+                <div class="list-item-title" style="font-size:var(--font-size-base)">赵朋</div>
+                <div class="list-item-sub" style="margin-top:2px">137 3344 5566 · 百度</div>
+              </div>
+            </div>
+          </div>
+          <span class="list-item-arrow" style="color:var(--color-textSecondary);font-size:20px;flex:none">›</span>
+        </div>
+
+      </div>
+      <button class="btn btn-primary btn-block" style="margin-top:var(--spacing-md)" data-show-sheet data-target="merge-all-confirm">
+        一键合并
+      </button>
+    </div>
+
+  </div>
+
+  <script>
+  (function(){
+    var page = document.querySelector('[data-page="duplicate-scan"]');
+    if (!page) return;
+    var tabs = page.querySelectorAll('.dup-tab');
+    var panels = page.querySelectorAll('.dup-tab-panel');
+
+    function switchTab(tabName) {
+      tabs.forEach(function(t){
+        if (t.dataset.dupTab === tabName) {
+          t.classList.add('active');
+          t.style.background = 'var(--color-surface)';
+          t.style.color = 'var(--color-textPrimary)';
+        } else {
+          t.classList.remove('active');
+          t.style.background = 'transparent';
+          t.style.color = 'var(--color-textSecondary)';
+        }
+      });
+      panels.forEach(function(p){
+        p.style.display = p.dataset.dupPanel === tabName ? 'block' : 'none';
+      });
+    }
+
+    tabs.forEach(function(tab){
+      tab.addEventListener('click', function(){
+        switchTab(tab.dataset.dupTab);
+      });
+    });
+  })();
+  </script>
+
+  <!-- 一键合并确认弹窗 -->
+  <div class="action-sheet-mask" id="merge-all-confirm">
+    <div class="action-sheet" style="padding:var(--spacing-md) var(--spacing-md) calc(var(--spacing-lg) + var(--spacing-md))">
+      <div style="display:flex;flex-direction:column;align-items:center;gap:var(--spacing-sm);padding:var(--spacing-sm) 0 var(--spacing-md)">
+        <div style="width:48px;height:48px;border-radius:50%;background:rgba(28,108,245,.12);display:flex;align-items:center;justify-content:center">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" style="color:var(--color-primary)">
+            <path d="M17 1l4 4-4 4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M3 11V9a4 4 0 014-4h14" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M7 23l-4-4 4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M21 13v2a4 4 0 01-4 4H3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        <div style="font-size:var(--font-size-base);font-weight:600;color:var(--color-textPrimary)">确认一键合并</div>
+        <div style="font-size:var(--font-size-sm);color:var(--color-textSecondary);text-align:center;line-height:1.5">
+          合并后联系人信息将自动去重，<br>相同字段保留一份，不同字段全部保留
+        </div>
+      </div>
+      <button class="btn btn-primary btn-block" data-goto="merge-loading">
+        确认合并
+      </button>
+      <button class="btn btn-secondary btn-block" style="margin-top:var(--spacing-sm)" data-hide-popup>
+        取消
+      </button>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 11. 重复合并详情 duplicate-merge ================= -->
+<section class="page" data-page="duplicate-merge">
+  <header class="app-bar">
+    <button class="app-bar-back" data-goto="duplicate-scan">‹</button>
+    <span class="app-bar-title">合并联系人</span>
+    <span style="width:32px"></span>
+  </header>
+
+  <div class="page-body">
+    <div style="
+      background:rgba(28,108,245,.1);
+      border-radius:var(--radius-lg);
+      padding:var(--spacing-md);
+      margin-bottom:12px;
+    ">
+      <div class="t-title" style="font-size:var(--font-size-sm);color:var(--color-primary);margin-bottom:var(--spacing-xs)">
+        高度疑似重复
+      </div>
+      <div class="t-sub" style="font-size:var(--font-size-sm);color:var(--color-textSecondary);margin-bottom:var(--spacing-xs)">
+        姓名 + 手机号完全相同
+      </div>
+      <div class="t-sub" style="line-height:1.5">
+        系统检测到两条高度相似的联系人记录，请确认合并后保留的信息。
+      </div>
+    </div>
+
+    <!-- 合并对比 -->
+    <div class="merge-compare" style="padding-top:12px;padding-bottom:12px;margin-bottom:4px">
+      <div class="merge-col">
+        <div class="avatar">张</div>
+        <div class="merge-name">张伟</div>
+        <div class="merge-phone">139 8888 6666</div>
+      </div>
+      <div class="merge-vs">VS</div>
+      <div class="merge-col">
+        <div class="avatar">张</div>
+        <div class="merge-name">张伟</div>
+        <div class="merge-phone">139 8888 6666</div>
+      </div>
+    </div>
+
+    <!-- 字段对比列表 -->
+    <div class="list-group">
+      <div class="list-section-header">合并后保留</div>
+      <div class="list-item" style="cursor:default">
+        <span class="form-label" style="width:60px">姓名</span>
+        <div style="flex:1;text-align:right">
+          <span class="list-item-title">张伟</span>
+        </div>
+      </div>
+      <div class="list-item" style="cursor:default">
+        <span class="form-label" style="width:60px">手机</span>
+        <div style="flex:1;text-align:right">
+          <span class="list-item-title">139 8888 6666</span>
+          <span class="t-sub"><br>2 条相同</span>
+        </div>
+      </div>
+      <div class="list-item" style="cursor:default">
+        <span class="form-label" style="width:60px">公司</span>
+        <div style="flex:1;text-align:right">
+          <span class="list-item-title">字节跳动</span>
+          <span class="t-sub"><br>取左侧</span>
+        </div>
+      </div>
+      <div class="list-item" style="cursor:default">
+        <span class="form-label" style="width:60px">邮箱</span>
+        <div style="flex:1;text-align:right">
+          <span class="list-item-title">2 个邮箱</span>
+          <span class="t-sub"><br>合并保留</span>
+        </div>
+      </div>
+      <div class="list-item" style="cursor:default">
+        <span class="form-label" style="width:60px">备注</span>
+        <div style="flex:1;text-align:right">
+          <span class="list-item-title">合并保留</span>
+          <span class="t-sub"><br>两侧备注都保留</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="padding-top:12px;padding-bottom:12px">
+      <div class="card-title">合并说明</div>
+      <p class="card-desc">
+        • 相同字段自动去重保留一份<br>
+        • 不同字段全部合并保留，不丢失信息<br>
+        • 合并后可在联系人详情中编辑
+      </p>
+    </div>
+
+    <button class="btn btn-primary btn-block" data-goto="merge-single-loading">
+      确认合并
+    </button>
+    <button class="btn btn-secondary btn-block" data-goto="duplicate-scan">
+      暂不合并
+    </button>
+  </div>
+</section>
+
+<!-- ================= 11a. 单组合并中 merge-single-loading ================= -->
+<section class="page" data-page="merge-single-loading">
+  <header class="app-bar">
+    <button class="app-bar-back" data-goto="duplicate-merge">‹</button>
+    <span class="app-bar-title">合并联系人</span>
+    <span style="width:32px"></span>
+  </header>
+
+  <div class="page-body">
+    <div class="loading-state" style="padding-top:var(--spacing-xl)">
+      <div class="spinner" id="merge-single-spinner"></div>
+      <div class="loading-text" id="merge-single-loading-text" style="font-size:var(--font-size-base);margin-top:var(--spacing-md)">
+        正在合并联系人…
+      </div>
+      <div class="t-cap" id="merge-single-loading-sub" style="margin-top:var(--spacing-xs)">正在整合重复的联系人信息</div>
+
+      <!-- 成功状态（默认隐藏） -->
+      <div id="merge-single-success" style="display:none;flex-direction:column;align-items:center">
+        <div style="width:64px;height:64px;border-radius:50%;background:rgba(52,199,89,.12);display:flex;align-items:center;justify-content:center;margin-bottom:var(--spacing-md)">
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" style="color:#34C759">
+            <path d="M20 6L9 17l-5-5" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        <div style="font-size:var(--font-size-base);font-weight:600;color:var(--color-textPrimary)">合并成功</div>
+        <div class="t-cap" style="margin-top:var(--spacing-xs)">已为你合并 2 条重复联系人</div>
+
+        <div style="width:100%;margin-top:var(--spacing-lg);display:flex;flex-direction:column;gap:var(--spacing-sm)">
+          <button class="btn btn-primary btn-block" data-goto="contact-detail">
+            查看联系人
+          </button>
+          <button class="btn btn-secondary btn-block" data-goto="duplicate-scan">
+            返回继续合并
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+  (function(){
+    var page = document.querySelector('[data-page="merge-single-loading"]');
+    if (!page) return;
+    var spinner = document.getElementById('merge-single-spinner');
+    var loadingText = document.getElementById('merge-single-loading-text');
+    var loadingSub = document.getElementById('merge-single-loading-sub');
+    var successBox = document.getElementById('merge-single-success');
+    var timer1 = null;
+
+    function startMerge(){
+      if (!page.hasAttribute('data-active')) return;
+      // 重置状态
+      spinner.style.display = '';
+      loadingText.style.display = '';
+      loadingSub.style.display = '';
+      successBox.style.display = 'none';
+
+      clearTimeout(timer1);
+
+      // 1.5秒后显示成功
+      timer1 = setTimeout(function(){
+        spinner.style.display = 'none';
+        loadingText.style.display = 'none';
+        loadingSub.style.display = 'none';
+        successBox.style.display = 'flex';
+      }, 1500);
+    }
+
+    var mo = new MutationObserver(startMerge);
+    mo.observe(page, { attributes: true, attributeFilter: ['data-active'] });
+    startMerge();
+  })();
+  </script>
+</section>
+
+<!-- ================= 11b. 批量合并中 merge-loading ================= -->
+<section class="page" data-page="merge-loading">
+  <header class="app-bar">
+    <button class="app-bar-back" data-goto="duplicate-scan">‹</button>
+    <span class="app-bar-title">合并联系人</span>
+    <span style="width:32px"></span>
+  </header>
+
+  <div class="page-body">
+    <div class="loading-state" style="padding-top:var(--spacing-xl)">
+      <div class="spinner" id="merge-spinner"></div>
+      <div class="loading-text" id="merge-loading-text" style="font-size:var(--font-size-base);margin-top:var(--spacing-md)">
+        正在合并联系人…
+      </div>
+      <div class="t-cap" id="merge-loading-sub" style="margin-top:var(--spacing-xs)">正在整合重复的联系人信息</div>
+
+      <!-- 成功状态（默认隐藏） -->
+      <div id="merge-success" style="display:none;flex-direction:column;align-items:center">
+        <div style="width:64px;height:64px;border-radius:50%;background:rgba(52,199,89,.12);display:flex;align-items:center;justify-content:center;margin-bottom:var(--spacing-md)">
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" style="color:#34C759">
+            <path d="M20 6L9 17l-5-5" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        <div style="font-size:var(--font-size-base);font-weight:600;color:var(--color-textPrimary)">合并成功</div>
+        <div class="t-cap" style="margin-top:var(--spacing-xs)">已为你合并 4 组重复联系人</div>
+
+        <div style="width:100%;margin-top:var(--spacing-lg)">
+          <button class="btn btn-primary btn-block" data-goto="duplicate-scan">
+            返回继续合并
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+  (function(){
+    var page = document.querySelector('[data-page="merge-loading"]');
+    if (!page) return;
+    var spinner = document.getElementById('merge-spinner');
+    var loadingText = document.getElementById('merge-loading-text');
+    var loadingSub = document.getElementById('merge-loading-sub');
+    var successBox = document.getElementById('merge-success');
+    var timer1 = null;
+
+    function startMerge(){
+      if (!page.hasAttribute('data-active')) return;
+      // 重置状态
+      spinner.style.display = '';
+      loadingText.style.display = '';
+      loadingSub.style.display = '';
+      successBox.style.display = 'none';
+
+      clearTimeout(timer1);
+
+      // 1.5秒后显示成功
+      timer1 = setTimeout(function(){
+        spinner.style.display = 'none';
+        loadingText.style.display = 'none';
+        loadingSub.style.display = 'none';
+        successBox.style.display = 'flex';
+      }, 1500);
+    }
+
+    var mo = new MutationObserver(startMerge);
+    mo.observe(page, { attributes: true, attributeFilter: ['data-active'] });
+    startMerge();
+  })();
+  </script>
+</section>
+
+<!-- ================= 12. 分享面板 share-sheet ================= -->
+<section class="page" data-page="share-sheet">
+  <div style="position:absolute;inset:0;background:rgba(0,0,0,.4);z-index:9" data-goto="contact-detail"></div>
+  <div class="sheet" style="position:absolute;left:0;right:0;bottom:0;z-index:10;
+    background:var(--color-surface);
+    border-radius:var(--radius-lg) var(--radius-lg) 0 0;
+    padding:var(--spacing-sm) var(--spacing-md) calc(var(--spacing-lg) + var(--spacing-md));
+  ">
+    <div class="sheet-handle" style="width:36px;height:4px;margin:var(--spacing-xs) auto var(--spacing-sm);
+      border-radius:var(--radius-full);background:var(--color-border);"></div>
+    <div class="sheet-title" style="font-size:var(--font-size-sm);font-weight:600;
+      color:var(--color-textSecondary);padding:var(--spacing-xs) 0 var(--spacing-md);text-align:center;">
+      分享名片
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:var(--spacing-sm);padding:var(--spacing-sm) 0 var(--spacing-md)">
+      <button class="action-btn" style="flex-direction:column;border:none" data-goto="wechat-share">
+        <span class="icon icon-lg"><span class="mask-icon icon-wechat"></span></span>
+        <span style="font-size:var(--font-size-xs);margin-top:var(--spacing-xs);color:var(--color-textPrimary)">微信</span>
+      </button>
+      <button class="action-btn" style="flex-direction:column;border:none">
+        <span class="icon icon-lg"><span class="mask-icon icon-copy"></span></span>
+        <span style="font-size:var(--font-size-xs);margin-top:var(--spacing-xs);color:var(--color-textPrimary)">复制链接</span>
+      </button>
+    </div>
+
+    <button class="sheet-item sheet-item-cancel" data-goto="contact-detail">取消</button>
+  </div>
+</section>
+
+<!-- ================= 微信分享消息页 wechat-share ================= -->
+<section class="page" data-page="wechat-share" style="background:#EDEDED">
+  <!-- 微信顶部栏 -->
+  <div style="position:sticky;top:0;z-index:5;
+    height:44px;display:flex;align-items:center;justify-content:space-between;
+    padding:0 14px;
+    background:#FFFFFF;
+    border-bottom:1px solid rgba(0,0,0,.06);
+  ">
+    <span style="width:32px;font-size:26px;color:#000;display:flex;align-items:center">
+      ‹
+    </span>
+    <span style="font-size:16px;font-weight:600;color:#000">李明</span>
+    <span style="width:32px;font-size:22px;color:#000;display:flex;justify-content:flex-end">
+      ⋯
+    </span>
+  </div>
+
+  <!-- 聊天内容 -->
+  <div style="display:flex;flex-direction:column;gap:var(--spacing-md);padding:20px 14px 0">
+    <!-- 时间分隔 -->
+    <div style="text-align:center;padding-top:20px">
+      <span style="font-size:11px;color:#999999;background:#DCDCDC;
+        padding:3px 8px;border-radius:4px">今天 14:32</span>
+    </div>
+
+    <!-- 对方消息：联系人名片 -->
+    <div style="display:flex;align-items:flex-start;gap:8px">
+      <div style="width:40px;height:40px;flex:none;border-radius:6px;
+        background:var(--color-primary);color:#fff;display:flex;align-items:center;justify-content:center;
+        font-size:14px;font-weight:600">李</div>
+      <div style="width:240px;max-width:72%">
+        <!-- 联系人名片卡片 -->
+        <button data-goto="h5-card" style="display:block;width:100%;text-align:left;
+          background:#FFFFFF;border-radius:8px;
+          padding:12px 12px 10px;border:none;cursor:pointer;
+          box-shadow:0 1px 2px rgba(0,0,0,.08);">
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+            <div style="width:40px;height:40px;flex:none;border-radius:50%;
+              background:var(--color-primary);color:#fff;display:flex;align-items:center;justify-content:center;
+              font-size:14px;font-weight:600">张</div>
+            <div style="flex:1;min-width:0">
+              <div style="font-size:15px;font-weight:600;color:#000">张伟</div>
+              <div style="font-size:12px;color:#888888;margin-top:2px">字节跳动</div>
+            </div>
+          </div>
+          <div style="border-top:1px solid #EDEDED;padding-top:8px;display:flex;align-items:center;gap:6px">
+            <span style="font-size:12px;color:#888888">名片</span>
+          </div>
+        </button>
+      </div>
+    </div>
+
+    <!-- 我方消息 -->
+    <div style="display:flex;align-items:flex-start;gap:8px;justify-content:flex-end">
+      <div style="max-width:72%;display:flex;align-items:flex-start;gap:8px;flex-direction:row-reverse">
+        <div style="width:40px;height:40px;flex:none;border-radius:6px;
+          background:#CCCCCC;color:#fff;display:flex;align-items:center;justify-content:center;
+          font-size:14px;font-weight:600">我</div>
+        <div style="background:#95EC69;border-radius:8px;
+          padding:10px 14px;font-size:15px;color:#000;
+          box-shadow:0 1px 2px rgba(0,0,0,.08);">
+          收到，我存一下
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 13. H5 名片页 h5-card ================= -->
+<section class="page" data-page="h5-card">
+  <!-- 微信顶部栏 -->
+  <div style="height:44px;display:flex;align-items:center;justify-content:space-between;
+    padding:0 14px;background:#FFFFFF;
+    border-bottom:1px solid rgba(0,0,0,.06);
+  ">
+    <span style="width:32px;font-size:26px;color:#000;display:flex;align-items:center">
+      ‹
+    </span>
+    <span style="font-size:16px;font-weight:600;color:#000">名片详情</span>
+    <span style="width:32px;font-size:22px;color:#000;display:flex;justify-content:flex-end">
+      ⋯
+    </span>
+  </div>
+
+  <div class="h5-card-wrap">
+    <!-- 顶部蓝色区 -->
+    <div class="h5-card-top">
+      <div class="avatar avatar-xl" style="background:#FFFFFF;color:var(--color-primary)">张</div>
+      <div class="h5-name">张伟</div>
+      <div class="h5-title">字节跳动</div>
+    </div>
+
+    <!-- 名片内容 -->
+    <div class="h5-card-body">
+      <div class="list-group" style="margin-bottom:var(--spacing-md)">
+        <div class="list-item" style="cursor:default">
+          <div class="list-item-with-icon">
+            <span class="icon icon-sm icon-soft"><span class="mask-icon icon-mobile"></span></span>
+            <div class="list-item-main">
+              <span class="list-item-sub">手机</span>
+              <span class="list-item-title">139 8888 6666</span>
+            </div>
+          </div>
+        </div>
+        <div class="list-item" style="cursor:default">
+          <div class="list-item-with-icon">
+            <span class="icon icon-sm icon-soft"><span class="mask-icon icon-email"></span></span>
+            <div class="list-item-main">
+              <span class="list-item-sub">邮箱</span>
+              <span class="list-item-title">zhangwei@bytedance.com</span>
+            </div>
+          </div>
+        </div>
+        <div class="list-item" style="cursor:default">
+          <div class="list-item-with-icon">
+            <span class="icon icon-sm icon-soft"><span class="mask-icon icon-building"></span></span>
+            <div class="list-item-main">
+              <span class="list-item-sub">公司</span>
+              <span class="list-item-title">字节跳动</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">备注</div>
+        <p class="card-desc">负责抖音电商产品方向，2024年Q1对接过直播带货项目。</p>
+      </div>
+    </div>
+
+    <!-- 底部下载栏 -->
+    <div class="h5-download-bar">
+      <button class="btn btn-primary btn-block" data-goto="view-card">
+        在智能通讯录 App 中打开
+      </button>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 查看他人名片 view-card ================= -->
+<section class="page" data-page="view-card">
+  <header class="app-bar">
+    <button class="app-bar-back" data-goto="home">‹</button>
+    <span class="app-bar-title">名片详情</span>
+    <span style="width:32px"></span>
+  </header>
+
+  <div class="page-body">
+    <!-- 顶部头像区 -->
+    <div class="detail-header">
+      <div class="avatar avatar-xl">张</div>
+      <div class="detail-name">张伟</div>
+      <div class="detail-company">字节跳动</div>
+    </div>
+
+    <!-- 电话 -->
+    <div class="list-group">
+      <div class="list-section-header">电话</div>
+      <div class="list-item" style="cursor:default">
+        <div class="list-item-with-icon">
+          <span class="icon icon-sm icon-soft"><span class="mask-icon icon-mobile"></span></span>
+          <div class="list-item-main">
+            <span class="list-item-title">手机</span>
+            <span class="list-item-sub">139 8888 6666</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 邮箱 -->
+    <div class="list-group">
+      <div class="list-section-header">邮箱</div>
+      <div class="list-item" style="cursor:default">
+        <div class="list-item-with-icon">
+          <span class="icon icon-sm icon-soft"><span class="mask-icon icon-email"></span></span>
+          <div class="list-item-main">
+            <span class="list-item-title">工作邮箱</span>
+            <span class="list-item-sub">zhangwei@bytedance.com</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 公司 -->
+    <div class="list-group">
+      <div class="list-section-header">公司</div>
+      <div class="list-item" style="cursor:default">
+        <div class="list-item-with-icon">
+          <span class="icon icon-sm icon-soft"><span class="mask-icon icon-building"></span></span>
+          <div class="list-item-main">
+            <span class="list-item-title">字节跳动</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 备注 -->
+    <div class="list-group">
+      <div class="list-section-header">备注</div>
+      <div class="list-item" style="cursor:default;min-height:auto;padding:var(--spacing-md)">
+        <span class="remark-text">负责抖音电商产品方向，2024年Q1对接过直播带货项目。</span>
+      </div>
+    </div>
+
+    <!-- 保存按钮 -->
+    <div style="margin-top:var(--spacing-lg)">
+      <button class="btn btn-primary btn-block" id="save-card-btn">
+        保存到我的通讯录
+      </button>
+    </div>
+
+    <!-- 保存成功浮窗 -->
+    <div id="save-toast" style="position:absolute;left:50%;top:50%;
+      transform:translate(-50%,-50%);z-index:20;
+      background:rgba(0,0,0,.75);color:#fff;
+      padding:18px 24px;border-radius:12px;
+      font-size:15px;display:none;
+      flex-direction:column;align-items:center;gap:10px;
+      min-width:140px;
+    ">
+      <span style="font-size:28px">✓</span>
+      <span>已保存到通讯录</span>
+    </div>
+  </div>
+
+  <script>
+  (function(){
+    var page = document.querySelector('[data-page="view-card"]');
+    if (!page) return;
+    var btn = document.getElementById('save-card-btn');
+    var toast = document.getElementById('save-toast');
+    if (!btn || !toast) return;
+    btn.addEventListener('click', function(){
+      toast.style.display = 'flex';
+      setTimeout(function(){
+        location.hash = '#/contact-detail';
+      }, 1200);
+    });
+    // 页面重新激活时隐藏toast
+    var mo = new MutationObserver(function(){
+      if (!page.hasAttribute('data-active')) {
+        toast.style.display = 'none';
+      }
+    });
+    mo.observe(page, { attributes: true, attributeFilter: ['data-active'] });
+  })();
+  </script>
+</section>
+
+<!-- ================= 15. 拨号盘 dial-pad ================= -->
+<section class="page" data-page="dial-pad">
+  <header class="app-bar">
+    <button class="app-bar-back" data-goto="contact-detail">‹</button>
+    <span class="app-bar-title">拨号</span>
+    <span style="width:32px"></span>
+  </header>
+
+  <div class="page-body">
+    <!-- 号码显示区 -->
+    <div class="dial-display">
+      <div class="dial-number">139 8888 6666</div>
+      <div class="dial-name">张伟</div>
+    </div>
+
+    <!-- 数字键盘 -->
+    <div class="dial-keypad">
+      <div class="keypad-row">
+        <button class="keypad-key">
+          <span class="key-num">1</span>
+          <span class="key-letters"></span>
+        </button>
+        <button class="keypad-key">
+          <span class="key-num">2</span>
+          <span class="key-letters">ABC</span>
+        </button>
+        <button class="keypad-key">
+          <span class="key-num">3</span>
+          <span class="key-letters">DEF</span>
+        </button>
+      </div>
+      <div class="keypad-row">
+        <button class="keypad-key">
+          <span class="key-num">4</span>
+          <span class="key-letters">GHI</span>
+        </button>
+        <button class="keypad-key">
+          <span class="key-num">5</span>
+          <span class="key-letters">JKL</span>
+        </button>
+        <button class="keypad-key">
+          <span class="key-num">6</span>
+          <span class="key-letters">MNO</span>
+        </button>
+      </div>
+      <div class="keypad-row">
+        <button class="keypad-key">
+          <span class="key-num">7</span>
+          <span class="key-letters">PQRS</span>
+        </button>
+        <button class="keypad-key">
+          <span class="key-num">8</span>
+          <span class="key-letters">TUV</span>
+        </button>
+        <button class="keypad-key">
+          <span class="key-num">9</span>
+          <span class="key-letters">WXYZ</span>
+        </button>
+      </div>
+      <div class="keypad-row">
+        <button class="keypad-key">
+          <span class="key-num">*</span>
+          <span class="key-letters"></span>
+        </button>
+        <button class="keypad-key">
+          <span class="key-num">0</span>
+          <span class="key-letters">+</span>
+        </button>
+        <button class="keypad-key">
+          <span class="key-num">#</span>
+          <span class="key-letters"></span>
+        </button>
+      </div>
+      <div class="keypad-row">
+        <button class="keypad-key keypad-empty"></button>
+        <button class="keypad-call">
+          <span class="icon"><span class="mask-icon icon-phone"></span></span>
+        </button>
+        <button class="keypad-key keypad-delete">
+          <span class="icon icon-sm"><span class="mask-icon icon-delete"></span></span>
+        </button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 16. 发短信 sms-compose ================= -->
+<section class="page" data-page="sms-compose">
+  <header class="app-bar">
+    <button class="app-bar-back" data-goto="contact-detail">‹</button>
+    <span class="app-bar-title">新建信息</span>
+    <button class="app-bar-action" style="color:var(--color-primary)">发送</button>
+  </header>
+
+  <div class="page-body">
+    <!-- 收件人 -->
+    <div class="sms-to">
+      <span class="sms-to-label">收件人：</span>
+      <span class="sms-to-name">张伟</span>
+      <span class="sms-to-phone">139 8888 6666</span>
+    </div>
+
+    <!-- 短信内容区 -->
+    <div class="sms-messages">
+      <div class="sms-bubble sms-bubble-received">
+        <span class="sms-bubble-text">你好，请问明天下午有时间吗？想约你聊一下项目的事情。</span>
+        <span class="sms-bubble-time">昨天 14:32</span>
+      </div>
+    </div>
+
+    <!-- 输入框 -->
+    <div class="sms-input-bar">
+      <textarea class="sms-input" rows="1" placeholder="iMessage"></textarea>
+      <button class="sms-send-btn">
+        <span class="icon icon-sm"><span class="mask-icon icon-send"></span></span>
+      </button>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 17. 设置 settings ================= -->
+<section class="page" data-page="settings">
+  <header class="app-bar">
+    <button class="app-bar-back" data-goto="home">‹</button>
+    <span class="app-bar-title">设置</span>
+    <span style="width:32px"></span>
+  </header>
+
+  <div class="page-body">
+    <!-- 数据管理 -->
+    <div class="settings-title">数据管理</div>
+    <div class="list-group">
+      <button class="list-item" data-goto="import-system">
+        <div class="list-item-with-icon">
+          <span class="icon icon-sm"><span class="mask-icon icon-import"></span></span>
+          <div class="list-item-main">
+            <span class="list-item-title">导入通讯录</span>
+          </div>
+        </div>
+        <span class="list-item-arrow">›</span>
+      </button>
+      <button class="list-item" data-goto="duplicate-scan">
+        <div class="list-item-with-icon">
+          <span class="icon icon-sm"><span class="mask-icon icon-search"></span></span>
+          <div class="list-item-main">
+            <span class="list-item-title">联系人去重</span>
+          </div>
+        </div>
+        <div class="row" style="gap:var(--spacing-sm)">
+          <span class="badge">10</span>
+          <span class="list-item-arrow">›</span>
+        </div>
+      </button>
+    </div>
+
+    <!-- 数据清理 -->
+    <div class="settings-title">数据清理</div>
+    <div class="list-group">
+      <button class="list-item" data-goto="clear-confirm">
+        <div class="list-item-with-icon">
+          <span class="icon icon-sm"><span class="mask-icon icon-trash"></span></span>
+          <div class="list-item-main">
+            <span class="list-item-title">一键清空通讯录</span>
+          </div>
+        </div>
+        <span class="list-item-arrow">›</span>
+      </button>
+    </div>
+
+    <!-- 关于 -->
+    <div class="settings-title">关于</div>
+    <div class="list-group">
+      <div class="list-item" style="cursor:default">
+        <span class="list-item-title">版本</span>
+        <span class="t-sub">1.0.0</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 设置·清空确认弹窗 clear-confirm ================= -->
+<section class="page" data-page="clear-confirm">
+  <div style="position:absolute;inset:0;background:rgba(0,0,0,.4);z-index:9"></div>
+  <div style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:10;
+    width:calc(100% - 48px);
+    background:var(--color-surface);
+    border-radius:var(--radius-lg);
+    padding:var(--spacing-lg) var(--spacing-md) var(--spacing-md);
+    text-align:center;
+  ">
+    <div style="width:56px;height:56px;margin:0 auto var(--spacing-md);
+      display:flex;align-items:center;justify-content:center;
+      border-radius:var(--radius-full);background:rgba(244,63,94,.12)">
+      <span style="font-size:28px;color:#F43F5E">!</span>
+    </div>
+    <div class="t-title" style="font-size:var(--font-size-lg);font-weight:700">
+      确定要清空通讯录吗？
+    </div>
+    <p class="t-sub" style="margin-top:var(--spacing-sm);line-height:1.7">
+      此操作将删除所有联系人数据，删除后无法恢复，请谨慎操作。
+    </p>
+
+    <div style="margin-top:var(--spacing-lg);display:flex;flex-direction:column;gap:var(--spacing-sm)">
+      <button id="clear-confirm-btn" class="btn btn-block" disabled
+        style="background:rgba(244,63,94,.3);color:#FFFFFF;cursor:not-allowed">
+        确定清空（5s）
+      </button>
+      <button class="btn btn-secondary btn-block" data-goto="settings">
+        取消
+      </button>
+    </div>
+  </div>
+
+  <script>
+  (function(){
+    var page = document.querySelector('[data-page="clear-confirm"]');
+    if (!page) return;
+    function startCountdown(){
+      if (!page.hasAttribute('data-active')) return;
+      var btn = document.getElementById('clear-confirm-btn');
+      if (!btn) return;
+      var count = 5;
+      btn.disabled = true;
+      btn.style.background = 'rgba(244,63,94,.3)';
+      btn.style.cursor = 'not-allowed';
+      btn.textContent = '确定清空（' + count + 's）';
+      var timer = setInterval(function(){
+        count--;
+        if (count <= 0) {
+          clearInterval(timer);
+          btn.disabled = false;
+          btn.style.background = '#F43F5E';
+          btn.style.cursor = 'pointer';
+          btn.textContent = '确定清空';
+        } else {
+          btn.textContent = '确定清空（' + count + 's）';
+        }
+      }, 1000);
+      btn.onclick = function(){
+        if (btn.disabled) return;
+        location.hash = '#/empty-state';
+      };
+    }
+    var mo = new MutationObserver(startCountdown);
+    mo.observe(page, { attributes: true, attributeFilter: ['data-active'] });
+    startCountdown();
+  })();
+  </script>
+</section>
+
+  <!-- ============ 全局弹窗 ============ -->
+
+  <!-- 分享弹窗 1（张伟/单电话详情） -->
+  <div class="share-sheet-mask" id="share-sheet-1">
+    <div class="share-sheet">
+      <div class="share-sheet-handle"></div>
+      <div class="share-sheet-title">分享名片</div>
+      <div class="share-sheet-grid">
+        <button class="action-btn" data-goto="wechat-share">
+          <span class="icon icon-lg"><span class="mask-icon icon-wechat"></span></span>
+          <span>微信</span>
+        </button>
+        <button class="action-btn" data-copy-link>
+          <span class="icon icon-lg"><span class="mask-icon icon-copy"></span></span>
+          <span>复制链接</span>
+        </button>
+      </div>
+      <button class="share-sheet-cancel" data-hide-popup>取消</button>
+    </div>
+  </div>
+
+  <!-- 删除确认弹窗 1（张伟/单电话详情） -->
+  <div class="action-sheet-mask" id="delete-confirm-1">
+    <div class="action-sheet" style="padding:var(--spacing-lg) var(--spacing-md) calc(var(--spacing-md) + env(safe-area-inset-bottom, 0px))">
+      <div class="confirm-icon" style="width:56px;height:56px;margin:0 auto var(--spacing-md);display:flex;align-items:center;justify-content:center;border-radius:50%;background:rgba(28,108,245,.12)">
+        <span class="mask-icon icon-trash" style="width:28px;height:28px;background-color:var(--color-primary);mask-repeat:no-repeat;-webkit-mask-repeat:no-repeat;mask-position:center;-webkit-mask-position:center;mask-size:100% 100%;-webkit-mask-size:100% 100%;display:block"></span>
+      </div>
+      <div class="confirm-title" style="font-size:var(--font-size-lg);font-weight:700;color:var(--color-textPrimary);text-align:center">确定要删除该联系人吗？</div>
+      <p class="confirm-desc" style="margin-top:var(--spacing-sm);font-size:var(--font-size-sm);color:var(--color-textSecondary);line-height:1.7;text-align:center">删除后联系人数据将无法恢复，请谨慎操作。</p>
+      <div class="confirm-actions" style="margin-top:var(--spacing-lg);display:flex;flex-direction:column;gap:var(--spacing-sm)">
+        <button class="confirm-btn confirm-btn-danger" data-goto="home" style="width:100%;height:48px;border-radius:var(--radius-full);font-size:var(--font-size-base);font-weight:600;border:none;cursor:pointer;font-family:inherit;background:var(--color-danger);color:#FFFFFF">确认删除</button>
+        <button class="confirm-btn confirm-btn-cancel" data-hide-popup style="width:100%;height:48px;border-radius:var(--radius-full);font-size:var(--font-size-base);font-weight:600;cursor:pointer;font-family:inherit;background:var(--color-surface);color:var(--color-textPrimary);border:1px solid var(--color-border)">取消</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 拨号选择器 2（李明/多电话详情） -->
+  <div class="action-sheet-mask" id="dial-sheet-2">
+    <div class="action-sheet">
+      <div class="action-sheet-title">选择要拨打的号码</div>
+      <div class="action-sheet-item" data-select-phone="138 0013 8000" data-goto="dial-pad">
+        <div class="sheet-icon"><span class="mask-icon icon-mobile"></span></div>
+        <div class="sheet-info">
+          <div class="sheet-label">手机</div>
+          <div class="sheet-value">138 0013 8000</div>
+        </div>
+      </div>
+      <div class="action-sheet-item" data-select-phone="0755-8601 3388" data-goto="dial-pad">
+        <div class="sheet-icon"><span class="mask-icon icon-phone-landline"></span></div>
+        <div class="sheet-info">
+          <div class="sheet-label">工作</div>
+          <div class="sheet-value">0755-8601 3388</div>
+        </div>
+      </div>
+      <div class="action-sheet-cancel" data-hide-popup>取消</div>
+    </div>
+  </div>
+
+  <!-- 短信选择器 2（李明/多电话详情） -->
+  <div class="action-sheet-mask" id="sms-sheet-2">
+    <div class="action-sheet">
+      <div class="action-sheet-title">选择要发送短信的号码</div>
+      <div class="action-sheet-item" data-select-phone="138 0013 8000" data-goto="sms-compose">
+        <div class="sheet-icon"><span class="mask-icon icon-mobile"></span></div>
+        <div class="sheet-info">
+          <div class="sheet-label">手机</div>
+          <div class="sheet-value">138 0013 8000</div>
+        </div>
+      </div>
+      <div class="action-sheet-item" data-select-phone="0755-8601 3388" data-goto="sms-compose">
+        <div class="sheet-icon"><span class="mask-icon icon-phone-landline"></span></div>
+        <div class="sheet-info">
+          <div class="sheet-label">工作</div>
+          <div class="sheet-value">0755-8601 3388</div>
+        </div>
+      </div>
+      <div class="action-sheet-cancel" data-hide-popup>取消</div>
+    </div>
+  </div>
+
+  <!-- 删除确认弹窗 2（李明/多电话详情） -->
+  <div class="action-sheet-mask" id="delete-confirm-2">
+    <div class="action-sheet" style="padding:var(--spacing-lg) var(--spacing-md) calc(var(--spacing-md) + env(safe-area-inset-bottom, 0px))">
+      <div class="confirm-icon" style="width:56px;height:56px;margin:0 auto var(--spacing-md);display:flex;align-items:center;justify-content:center;border-radius:50%;background:rgba(28,108,245,.12)">
+        <span class="mask-icon icon-trash" style="width:28px;height:28px;background-color:var(--color-primary);mask-repeat:no-repeat;-webkit-mask-repeat:no-repeat;mask-position:center;-webkit-mask-position:center;mask-size:100% 100%;-webkit-mask-size:100% 100%;display:block"></span>
+      </div>
+      <div class="confirm-title" style="font-size:var(--font-size-lg);font-weight:700;color:var(--color-textPrimary);text-align:center">确定要删除该联系人吗？</div>
+      <p class="confirm-desc" style="margin-top:var(--spacing-sm);font-size:var(--font-size-sm);color:var(--color-textSecondary);line-height:1.7;text-align:center">删除后联系人数据将无法恢复，请谨慎操作。</p>
+      <div class="confirm-actions" style="margin-top:var(--spacing-lg);display:flex;flex-direction:column;gap:var(--spacing-sm)">
+        <button class="confirm-btn confirm-btn-danger" data-goto="home" style="width:100%;height:48px;border-radius:var(--radius-full);font-size:var(--font-size-base);font-weight:600;border:none;cursor:pointer;font-family:inherit;background:var(--color-danger);color:#FFFFFF">确认删除</button>
+        <button class="confirm-btn confirm-btn-cancel" data-hide-popup style="width:100%;height:48px;border-radius:var(--radius-full);font-size:var(--font-size-base);font-weight:600;cursor:pointer;font-family:inherit;background:var(--color-surface);color:var(--color-textPrimary);border:1px solid var(--color-border)">取消</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 分享弹窗 2（李明/多电话详情） -->
+  <div class="share-sheet-mask" id="share-sheet-2">
+    <div class="share-sheet">
+      <div class="share-sheet-handle"></div>
+      <div class="share-sheet-title">分享名片</div>
+      <div class="share-sheet-grid">
+        <button class="action-btn" data-goto="wechat-share">
+          <span class="icon icon-lg"><span class="mask-icon icon-wechat"></span></span>
+          <span>微信</span>
+        </button>
+        <button class="action-btn" data-copy-link>
+          <span class="icon icon-lg"><span class="mask-icon icon-copy"></span></span>
+          <span>复制链接</span>
+        </button>
+      </div>
+      <button class="share-sheet-cancel" data-hide-popup>取消</button>
+    </div>
+  </div>
+
+  <!-- Toast 提示（与 view-card 页样式一致） -->
+  <div class="toast-mask" id="toast">
+    <div class="toast">
+      <span class="toast-icon">✓</span>
+      <span id="toast-text">已复制</span>
+    </div>
+  </div>
+
+    </div>
+    <div class="homebar"></div>
+  </div>
+</main>
+
+<script>
+(function(){
+  var root = document.documentElement;
+
+  function currentId(){
+    var m = location.hash.match(/^#\/(.+)$/);
+    return m ? m[1] : null;
+  }
+  function show(id){
+    var pages = document.querySelectorAll('.page');
+    if (!pages.length) return;
+    var ids = [].map.call(pages, function(p){ return p.dataset.page; });
+    if (!id || ids.indexOf(id) === -1) id = ids[0];
+    [].forEach.call(pages, function(p){
+      if (p.dataset.page === id) p.setAttribute('data-active', '');
+      else p.removeAttribute('data-active');
+    });
+    [].forEach.call(document.querySelectorAll('[data-page-link]'), function(a){
+      if (a.dataset.pageLink === id) a.setAttribute('aria-current', 'page');
+      else a.removeAttribute('aria-current');
+    });
+    var sc = document.querySelector('.screen') || document.querySelector('main');
+    if (sc) sc.scrollTop = 0;
+    // 切换页面时关闭所有弹窗和 Toast
+    var allPopups = document.querySelectorAll('.action-sheet-mask, .share-sheet-mask, .confirm-mask');
+    allPopups.forEach(function(p){ p.removeAttribute('data-show'); p.style.top=''; p.style.height=''; p.style.bottom=''; });
+    var toastEl = document.getElementById('toast');
+    if (toastEl){ toastEl.removeAttribute('data-show'); toastEl.style.top=''; toastEl.style.height=''; toastEl.style.bottom=''; }
+    if (toastTimer) { clearTimeout(toastTimer); toastTimer = null; }
+    var screenEl = document.querySelector('.screen');
+    if (screenEl) screenEl.removeAttribute('data-sheet-open');
+  }
+  function go(id){ location.hash = '#/' + id; }
+
+  document.addEventListener('click', function(e){
+    var t = e.target.closest('[data-page-link],[data-goto],[data-toggle]');
+    if (!t) return;
+
+    if (t.dataset.toggle) {
+      var kind = t.dataset.toggle;
+      var pair = { auth:['in','out'], theme:['light','dark'], rail:['open','closed'] }[kind];
+      var next = root.dataset[kind] === pair[0] ? pair[1] : pair[0];
+      root.dataset[kind] = next;
+      t.setAttribute('aria-pressed', String(next === pair[0]));
+      t.textContent = kind === 'auth' ? (next === 'in' ? '已登录' : '未登录')
+                    : kind === 'theme' ? (next === 'light' ? '暗色' : '亮色')
+                    : (next === 'open' ? '收起' : '展开');
+      return;
+    }
+
+    if (t.dataset.pageLink) { go(t.dataset.pageLink); return; }
+
+    if (t.dataset.goto) {
+      var when = t.dataset.when;
+      if (when && when !== root.dataset.auth) return;
+      // 如果在弹窗内触发跳转，先关闭弹窗
+      var popupMask = t.closest('.action-sheet-mask, .share-sheet-mask, .confirm-mask');
+      if (popupMask) hidePopup(popupMask);
+      go(t.dataset.goto);
+    }
+  });
+
+  window.addEventListener('hashchange', function(){ show(currentId()); });
+  show(currentId());
+
+  // 字母索引点击滚动
+  document.addEventListener('click', function(e){
+    var t = e.target.closest('[data-scroll-to]');
+    if (!t) return;
+    var targetId = t.dataset.scrollTo;
+    var target = document.getElementById(targetId);
+    if (!target) return;
+    var screen = document.querySelector('.screen');
+    if (!screen) return;
+    var page = target.closest('.page');
+    if (!page || !page.hasAttribute('data-active')) return;
+    target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
+
+  // 电话行：添加 / 删除
+  var PHONE_TYPES = [
+    { value: 'work', label: '工作' },
+    { value: 'home', label: '家庭' },
+    { value: 'other', label: '其他' }
+  ];
+
+  function createPhoneRow() {
+    var row = document.createElement('div');
+    row.className = 'phone-row';
+
+    var select = document.createElement('select');
+    select.className = 'phone-type-select';
+    PHONE_TYPES.forEach(function(t) {
+      var opt = document.createElement('option');
+      opt.value = t.value;
+      opt.textContent = t.label;
+      select.appendChild(opt);
+    });
+
+    var input = document.createElement('input');
+    input.className = 'phone-input';
+    input.type = 'tel';
+    input.placeholder = '请输入电话号码';
+
+    var delBtn = document.createElement('button');
+    delBtn.type = 'button';
+    delBtn.className = 'phone-delete';
+    delBtn.innerHTML = '<span class="icon"><span class="mask-icon icon-delete"></span></span>';
+    delBtn.addEventListener('click', function() {
+      row.remove();
+    });
+
+    row.appendChild(select);
+    row.appendChild(input);
+    row.appendChild(delBtn);
+    return row;
+  }
+
+  document.addEventListener('click', function(e) {
+    var addBtn = e.target.closest('[data-add-phone]');
+    if (!addBtn) return;
+    var group = addBtn.closest('[data-phone-group]');
+    if (!group) return;
+    var newRow = createPhoneRow();
+    group.insertBefore(newRow, addBtn);
+  });
+
+  // ========== 统一弹窗控制（基于 ID） ==========
+  var screen = document.querySelector('.screen');
+
+  function showPopup(id) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    // 修复：弹窗在 overflow:auto 的 screen 中，需根据滚动位置调整 top/height
+    // 使弹窗蒙层覆盖当前可视区域，而不是整个内容高度
+    if (screen) {
+      var st = screen.scrollTop;
+      var vh = screen.clientHeight;
+      el.style.top = st + 'px';
+      el.style.height = vh + 'px';
+      el.style.bottom = 'auto';
+    }
+    el.setAttribute('data-show', 'true');
+    if (screen) screen.setAttribute('data-sheet-open', 'true');
+  }
+  function hidePopup(el) {
+    if (typeof el === 'string') el = document.getElementById(el);
+    if (!el) return;
+    el.removeAttribute('data-show');
+    // 清除内联定位样式
+    el.style.top = '';
+    el.style.height = '';
+    el.style.bottom = '';
+    // 检查是否还有其他弹窗开着
+    var anyOpen = document.querySelector('.action-sheet-mask[data-show], .share-sheet-mask[data-show], .confirm-mask[data-show]');
+    if (!anyOpen && screen) screen.removeAttribute('data-sheet-open');
+  }
+
+  var toastTimer = null;
+  function showToast(text, duration) {
+    var toast = document.getElementById('toast');
+    if (!toast) return;
+    var textEl = document.getElementById('toast-text');
+    if (textEl && text) textEl.textContent = text;
+    // 定位到当前可视区域（同弹窗逻辑）
+    if (screen) {
+      var st = screen.scrollTop;
+      var vh = screen.clientHeight;
+      toast.style.top = st + 'px';
+      toast.style.height = vh + 'px';
+      toast.style.bottom = 'auto';
+    }
+    toast.setAttribute('data-show', 'true');
+    if (toastTimer) clearTimeout(toastTimer);
+    toastTimer = setTimeout(function(){
+      toast.removeAttribute('data-show');
+      toast.style.top = '';
+      toast.style.height = '';
+      toast.style.bottom = '';
+    }, duration || 1500);
+  }
+
+  function getCurrentContactName() {
+    var activePage = document.querySelector('.page[data-active]');
+    if (!activePage) return '联系人';
+    var nameEl = activePage.querySelector('.detail-name');
+    return nameEl ? nameEl.textContent : '联系人';
+  }
+
+  function updateTargetPages(name, phone) {
+    var dialPage = document.querySelector('[data-page="dial-pad"]');
+    if (dialPage) {
+      var numEl = dialPage.querySelector('.dial-number');
+      var nameEl = dialPage.querySelector('.dial-name');
+      if (numEl) numEl.textContent = phone;
+      if (nameEl) nameEl.textContent = name;
+    }
+    var smsPage = document.querySelector('[data-page="sms-compose"]');
+    if (smsPage) {
+      var nameEl2 = smsPage.querySelector('.sms-to-name');
+      var phoneEl = smsPage.querySelector('.sms-to-phone');
+      if (nameEl2) nameEl2.textContent = name;
+      if (phoneEl) phoneEl.textContent = phone;
+    }
+  }
+
+  document.addEventListener('click', function(e) {
+    // 显示弹窗（通过 data-target 指定 ID）
+    var showBtn = e.target.closest('[data-show-sheet], [data-show-share], [data-show-delete]');
+    if (showBtn) {
+      var targetId = showBtn.dataset.target;
+      if (targetId) showPopup(targetId);
+      return;
+    }
+
+    // 关闭弹窗
+    var hideBtn = e.target.closest('[data-hide-popup]');
+    if (hideBtn) {
+      var mask = hideBtn.closest('.action-sheet-mask, .share-sheet-mask, .confirm-mask');
+      if (mask) hidePopup(mask);
+      return;
+    }
+
+    // 点击遮罩关闭
+    var maskEl = e.target.closest('.action-sheet-mask, .share-sheet-mask, .confirm-mask');
+    if (maskEl && e.target === maskEl) {
+      hidePopup(maskEl);
+      return;
+    }
+
+    // 选择号码后跳转（号码选择器）
+    var selectItem = e.target.closest('[data-select-phone]');
+    if (selectItem) {
+      var phone = selectItem.dataset.selectPhone;
+      var name = getCurrentContactName();
+      var parentMask = selectItem.closest('.action-sheet-mask');
+      updateTargetPages(name, phone);
+      if (parentMask) hidePopup(parentMask);
+    }
+
+    // 复制链接（分享弹窗）
+    var copyBtn = e.target.closest('[data-copy-link]');
+    if (copyBtn) {
+      var shareMask = copyBtn.closest('.share-sheet-mask');
+      if (shareMask) hidePopup(shareMask);
+      showToast('已复制', 1500);
+      return;
+    }
+  });
+
+})();
+</script>
+</body>
+</html>
